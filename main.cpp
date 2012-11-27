@@ -283,7 +283,8 @@ int main()
                     mvprintw(2,0,"Unable to snarf file!");
                     continue;
                 }
-                fwrite(snarf_buffer, MAX_SNARF, 1, file);
+                fwrite(snarf_buffer, rtosc_message_length(snarf_buffer),
+                        1, file);
                 mvprintw(2,0,"snarf saved...");
                 break;
             case KEY_F(2): //loading snarf
@@ -292,6 +293,7 @@ int main()
                     mvprintw(2,0,"Unable to unsnarf file!");
                     continue;
                 }
+                memset(snarf_buffer, 0, MAX_SNARF);
                 fread(snarf_buffer, MAX_SNARF, 1, file);
                 mvprintw(2,0,"snarf loaded...");
                 break;
