@@ -119,13 +119,8 @@ void describe(msg_t m, void*)
     const char *ss = rtosc_argument(m,0).s;
     if(*s=='/') ++s;
     const Port *p = ports.apropos(s);
-    if(p) {
-        if(index(p->name,'/')) {
-            display("describe not supported for directories");
-            return;
-        }
+    if(p)
         display(p->metadata);
-    }
     else
         bToU.write("/display", "sss", "could not find path...<", ss, ">");
 }
@@ -222,6 +217,7 @@ void init_audio(void)
 {
     //setup miditable
     midi.event_cb = [](const char *m){ports.dispatch(m+1, NULL);};
+
     //Setup ports
     client = jack_client_open("oscprompt-demo", JackNullOption, NULL, NULL);
     jack_set_process_callback(client, process, NULL);
