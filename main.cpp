@@ -2,7 +2,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <rtosc/rtosc.h>
+#include <rtosc/ports.h>
 #include <rtosc/thread-link.h>
+#include <cstdlib>
+#include <cctype>
+using namespace rtosc;
 
 extern ThreadLink<1024,1024> bToU;
 extern ThreadLink<1024,1024> uToB;
@@ -196,15 +200,15 @@ void die_nicely(msg_t, void*)
     do_exit = 1;
 }
 
-Ports<2,void> viewports{{{
-    Port<void>("display", "", display),
-    Port<void>("exit", "", die_nicely),
-}}};
+Ports viewports = {
+    {"display", "", 0, display},
+    {"exit", "", 0, die_nicely},
+};
 
 void tab_complete(void)
 {
     //Base port level from synth code
-    extern _Ports *backend_ports;
+    extern Ports *backend_ports;
 
     //Either get a string from the start or from a later path contained in a
     //string
@@ -217,7 +221,7 @@ void tab_complete(void)
 
     //Try to perform tab completion based upon the given string
     if(str) {
-        const _Port *port = backend_ports->apropos(str+1);
+        const Port *port = backend_ports->apropos(str+1);
         if(!port) {
             mvprintw(2,0,"no match...\n");
             mvprintw(3,0,"                                 \n");
