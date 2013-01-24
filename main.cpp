@@ -6,6 +6,7 @@
 #include <rtosc/thread-link.h>
 #include <cstdlib>
 #include <cctype>
+#include <string>
 using namespace rtosc;
 
 extern ThreadLink<1024,1024> bToU;
@@ -20,9 +21,22 @@ char message_arguments[32];
 int  message_pos=0;
 int  message_narguments=0;
 
-int i = 2; //Printer location
+//Error detected in user promppt
 int error = 0;
 
+
+//UI Windows
+WINDOW *prompt;  //The input pane
+WINDOW *log;     //The outupt pane
+WINDOW *status;  //The pattern matching and documentation pane
+
+
+/**
+ * Parses simple messages from strings into something that librtosc can accept
+ *
+ * This function assumes that message_buffer contains a valid string and that
+ * message_arguments is populated as a side effect of the pretty printer
+ */
 void send_message(void)
 {
     const char *str = message_buffer;
@@ -37,7 +51,7 @@ void send_message(void)
     }
 
     //Load arguments
-    arg_t *args = new arg_t[message_narguments];
+    rtosc_arg_t *args = new rtosc_arg_t[message_narguments];
 
     //String buffer
     char buf[1024];
@@ -81,24 +95,23 @@ int float_p(const char *str)
     return result;
 }
 
-bool print_colorized_message(void)
+bool print_colorized_message(WINDOW *window)
 {
     //Reset globals
-    i = 2;
     message_narguments = 0;
 
     bool error = false;
     const char *str = message_buffer;
 
     //Print the path
-    attron(A_BOLD);
+    wattron(window, A_BOLD);
     while(*str && *str!=' ')
-        mvprintw(1, i++, "%c", *str++);
-    attroff(A_BOLD);
+        wprintw(window, "%c", *str++);
+    wattroff(window, A_BOLD);
 
     do {
         while(*str==' ')
-            mvprintw(1, i++, " "), ++str;
+            wprintw(window, " "), ++str;
 
         const bool is_float = float_p(str);
         switch(*str)
@@ -117,51 +130,44 @@ bool print_colorized_message(void)
             case '9':
                 message_arguments[message_narguments++] = is_float ? 'f' : 'i';
 
-                attron(COLOR_PAIR(is_float ? 4:1));
+                wattron(window, COLOR_PAIR(is_float ? 4:1));
                 while(*str && (isdigit(*str) || *str == '.' || *str == '-'))
-                    mvprintw(1,i++,"%c",*str++);
-                attroff(COLOR_PAIR(is_float ? 4:1));
+                    wprintw(window, "%c",*str++);
+                wattroff(window, COLOR_PAIR(is_float ? 4:1));
 
                 //Stuff was left on the end of the the number
                 while(*str && *str != ' ') {
                     error = true;
-                    attron(COLOR_PAIR(2));
-                    mvprintw(1,i++,"%c", *str++);
-                    attroff(COLOR_PAIR(2));
+                    wattron(window, COLOR_PAIR(2));
+                    wprintw(window, "%c", *str++);
+                    wattroff(window, COLOR_PAIR(2));
                 }
                 break;
 
             case 'T':
-                message_arguments[message_narguments++] = 'T';
-                attron(COLOR_PAIR(5));
-                mvprintw(1,i++,"T");
-                attroff(COLOR_PAIR(5));
-                ++str;
-                break;
             case 'F':
-                message_arguments[message_narguments++] = 'F';
-                attron(COLOR_PAIR(5));
-                mvprintw(1,i++,"F");
-                attroff(COLOR_PAIR(5));
-                ++str;
+                message_arguments[message_narguments++] = *str;
+                wattron(window, COLOR_PAIR(5));
+                wprintw(window, "%c", *str++);
+                wattroff(window, COLOR_PAIR(5));
                 break;
 
             case '"':
                 message_arguments[message_narguments++] = 's';
-                attron(COLOR_PAIR(3));
-                mvprintw(1,i++,"%c",*str++);
+                wattron(window, COLOR_PAIR(3));
+                wprintw(window, "%c",*str++);
                 while(*str && *str != '"')
-                    mvprintw(1,i++,"%c",*str++);
+                    wprintw(window, "%c",*str++);
                 if(*str == '"')
-                    mvprintw(1,i++,"%c",*str++);
+                    wprintw(window, "%c",*str++);
                 else
                     error = true;
-                attroff(COLOR_PAIR(3));
+                wattroff(window, COLOR_PAIR(3));
                 break;
             default:
-                attron(COLOR_PAIR(2));
-                mvprintw(1,i++,"%c", *str++);
-                attroff(COLOR_PAIR(2));
+                wattron(window, COLOR_PAIR(2));
+                wprintw(window, "%c", *str++);
+                wattroff(window, COLOR_PAIR(2));
                 error = true;
             case '\0':
                 ;
@@ -172,25 +178,33 @@ bool print_colorized_message(void)
 }
 
 
+/**
+ * Write a "/display *" style message to the log screen piece by piece
+ */
 void display(msg_t msg, void*)
 {
-    move(5,0);
-    insertln();
     const unsigned nargs = rtosc_narguments(msg);
     for(int i=0; i<nargs; ++i) {
+        wprintw(log, i?"\n   ":"\n\n");
         switch(rtosc_type(msg, i)) {
             case 's':
-                printw("%s ", rtosc_argument(msg,i).s);
+                wattron(log, COLOR_PAIR(3));
+                wprintw(log, "%s", rtosc_argument(msg,i).s);
+                wattroff(log, COLOR_PAIR(3));
                 break;
             case 'i':
-                printw("%d ", rtosc_argument(msg,i).i);
+                wattron(log, COLOR_PAIR(1));
+                wprintw(log, "%d", rtosc_argument(msg,i).i);
+                wattroff(log, COLOR_PAIR(1));
                 break;
             case 'f':
-                printw("%f ", rtosc_argument(msg,i).f);
+                wattron(log, COLOR_PAIR(4));
+                wprintw(log, "%f", rtosc_argument(msg,i).f);
+                wattroff(log, COLOR_PAIR(4));
                 break;
         }
     }
-    move(1,i);
+    wrefresh(log);
 }
 
 int do_exit = 0;
@@ -205,45 +219,185 @@ Ports viewports = {
     {"exit", "", 0, die_nicely},
 };
 
+enum presentation_t
+{
+    SHORT,
+    LONG
+};
+
+void emit_status_field(const char *name, const char *metadata, presentation_t mode)
+{
+    if(!metadata)
+        metadata = "";
+
+    const char *doc_str = rindex(metadata, ':');
+    if(doc_str)
+        doc_str++;
+
+    int color = 0;
+    if(strstr(name, ":f"))
+        color = 4;
+    else if(strstr(name, ":i"))
+        color = 1;
+    else if(strstr(name, ":T") || strstr(name, ":F"))
+        color = 5;
+    else if(strstr(name, ":s"))
+        color = 3;
+    else
+        color = 2;
+
+    wattron(status, A_BOLD);
+    if(color)
+        wattron(status, COLOR_PAIR(color));
+    wprintw(status, "%s ::\n", name);
+    if(color)
+        wattroff(status, COLOR_PAIR(color));
+    wattroff(status, A_BOLD);
+
+    wprintw(status,"    %s\n", doc_str);
+
+    if(mode==LONG) {
+        if(index(metadata, ':') && index(metadata, ':')[1] != ':') {
+            wattron(status, A_BOLD);
+            wprintw(status, "  Properties:");
+            wattroff(status, A_BOLD);
+            int quotes = 0;
+            for(const char *p=index(metadata, ':')+1; *p && *p != ':'; ++p) {
+                if(*p=='\'' && !(quotes++%2))
+                    wprintw(status, "\n    ");
+                wprintw(status, "%c", *p);
+            }
+            wprintw(status, "\n");
+        }
+        if(*metadata && *metadata != ':') {
+            wattron(status, A_BOLD);
+            wprintw(status, "  Midi Conversion:\n    ");
+            wattroff(status, A_BOLD);
+            for(const char *p=metadata; *p && *p != ':'; ++p)
+                wprintw(status, "%c", *p);
+        }
+    }
+}
+
+void rebuild_status(void)
+{
+    //Base port level from synth code
+    extern const Ports *backend_ports;
+
+    //Trim the string to its last subpath.
+    //This allows manual filtering of the results
+    char *str = strdup(message_buffer);
+
+    if(index(str,' ')) {//This path is complete
+        free(str);
+        return;
+    }
+
+    char *thresh = rindex(str, '/');
+    if(thresh) {//kill off any digits in the path to allow cheap matching
+        char *digit_elim=thresh;
+        while(*digit_elim++)
+            if(isdigit(*digit_elim))
+                *digit_elim=0;
+    }
+
+    //split strings
+    if(thresh)
+        *thresh = 0;
+
+    const Ports *ports = NULL;
+    if(!*str)
+        ports = backend_ports;
+    else {
+        const Port *port = backend_ports->apropos((std::string(str+1)+'/').c_str());
+        if(port)
+            ports = port->ports;
+    }
+
+    werase(status);
+
+    if(!ports) {
+        wprintw(status,"no match...\n");
+    } else {
+        int num_fields = 0;
+        for(const Port &p:*ports) {
+            if(thresh && strstr(p.name, thresh+1)!=p.name)
+                continue;
+            ++num_fields;
+        }
+
+        for(const Port &p:*ports) {
+            if(thresh && strstr(p.name, thresh+1)!=p.name)
+                continue;
+            emit_status_field(p.name, p.metadata, num_fields==1 ? LONG : SHORT);
+        }
+    }
+
+    free(str);
+}
+
 void tab_complete(void)
 {
     //Base port level from synth code
     extern Ports *backend_ports;
 
-    //Either get a string from the start or from a later path contained in a
-    //string
-    char *str = NULL;
-    if(*message_buffer=='/')
-        str = message_buffer;
-    char *tmp = rindex(message_buffer,'"');
-    if(tmp && tmp[1] == '/')
-        str = tmp+1;
+    //Trim the string to its last subpath.
+    //This allows manual filtering of the results
+    char *str = strdup(message_buffer);
 
-    //Try to perform tab completion based upon the given string
-    if(str) {
-        const Port *port = backend_ports->apropos(str+1);
-        if(!port) {
-            mvprintw(2,0,"no match...\n");
-            mvprintw(3,0,"                                 \n");
-        } else {
-            mvprintw(2,0,"best match (%s)...\n", port->name);
-            if(index(port->name,'/')) {
-                mvprintw(3,0,"                                 \n");
-            } else
-                mvprintw(3,0,"doc %s\n", port->metadata);
-            //Now to rewrite the buffer's end with this new match
+    if(index(str,' ')) {//This path is complete
+        free(str);
+        return;
+    }
+
+    char *thresh = rindex(str, '/');
+    if(thresh) {//kill off any digits in the path to allow cheap matching
+        char *digit_elim=thresh;
+        while(*digit_elim++)
+            if(isdigit(*digit_elim))
+                *digit_elim=0;
+    }
+
+    //split strings
+    if(thresh)
+        *thresh = 0;
+
+    const Ports *ports = NULL;
+    if(!*str)
+        ports = backend_ports;
+    else {
+        const Port *port = backend_ports->apropos((std::string(str+1)+'/').c_str());
+        if(port)
+            ports = port->ports;
+    }
+
+    werase(status);
+
+    if(!ports) {
+        wprintw(status,"no match...\n");
+    } else {
+        for(const Port &port:*ports) {
+            if(thresh && strstr(port.name, thresh+1)!=port.name)
+                continue;
             char *w_ptr = rindex(message_buffer,'/')+1;
-            const char *src = port->name;
+            const char *src = port.name;
             while(*src && *src != '#' && *src != ':')
                 *w_ptr++ = *src++;
             message_pos = strlen(message_buffer);
+            free(str);
+            return;
         }
     }
+    free(str);
+    wprintw(status,"no match...\n");
 }
 
 void init_audio(void);
 int main()
 {
+    //For misc utf8 chars
+    setlocale(LC_ALL, "");
+
     init_audio();
     memset(message_buffer,   0,sizeof(message_buffer));
     memset(message_arguments,0,sizeof(message_arguments));
@@ -254,8 +408,8 @@ int main()
     initscr();
     raw();
     keypad(stdscr, TRUE);
-    timeout(100);
     noecho();
+    curs_set(0);
 
     start_color();
     init_pair(1, COLOR_BLUE,   COLOR_BLACK);
@@ -264,50 +418,79 @@ int main()
     init_pair(4, COLOR_CYAN,   COLOR_BLACK);
     init_pair(5, COLOR_YELLOW, COLOR_BLACK);
 
+    //Define windows
+    log    = newwin(LINES-3, COLS/2-3, 1, 1);
+    status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
+    prompt = newwin(1, COLS, LINES-1,0);
+    scrollok(log, TRUE);
+    wtimeout(prompt, 100);
+    {
+        WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
+        box(helper_box,0,0);
+        wrefresh(helper_box);
+    }
+    {
+        WINDOW *helper_box = newwin(LINES-1,COLS/2,0,COLS/2);
+        box(helper_box,0,0);
+        wrefresh(helper_box);
+    }
 
     //Loop on prompt until the program should exit
-    printw("Type magical OSC incantations or (/help)\n> ");
-
     do {
+        //Redraw prompt
+        wclrtoeol(prompt);
+        wprintw(prompt,":> ");
+        error = print_colorized_message(prompt);
+        wprintw(prompt,"\r");
+        wrefresh(prompt);
+
+        //box(helper_box,0,0);
+        //wrefresh(helper_box);
+
+        wrefresh(log);
+
+        wrefresh(status);
+
         //Handle events from backend
         while(bToU.hasNext())
             viewports.dispatch(bToU.read()+1, NULL);
 
         FILE *file;
-        switch(ch = getch()) {
+        switch(ch = wgetch(prompt)) {
             case KEY_BACKSPACE:
-                if(message_pos) {
+            case '':
+                if(message_pos)
                     message_buffer[--message_pos] = 0;
-                    mvprintw(1,i-1," ");
-                }
+                rebuild_status();
                 break;
             case KEY_F(1): //saving snarf
                 file=fopen("osc-prompt.snarf","wb");
                 if(!file) {
-                    mvprintw(2,0,"Unable to snarf file!");
+                    wprintw(status,"Unable to snarf file!");
                     continue;
                 }
-                fwrite(snarf_buffer, rtosc_message_length(snarf_buffer),
+                fwrite(snarf_buffer, rtosc_message_length(snarf_buffer, MAX_SNARF),
                         1, file);
-                mvprintw(2,0,"snarf saved...");
+                wprintw(status,"snarf saved...");
                 break;
             case KEY_F(2): //loading snarf
                 file=fopen("osc-prompt.snarf","rb");
                 if(!file) {
-                    mvprintw(2,0,"Unable to unsnarf file!");
+                    wprintw(status,"Unable to unsnarf file!");
                     continue;
                 }
                 memset(snarf_buffer, 0, MAX_SNARF);
                 fread(snarf_buffer, MAX_SNARF, 1, file);
-                mvprintw(2,0,"snarf loaded...");
+                wprintw(status,"snarf loaded...");
                 break;
             case '\t':
                 tab_complete();
+                rebuild_status();
                 break;
             case '\n':
             case '\r':
                 if(error)
-                    mvprintw(2,0,"bad message...");
+                    wprintw(status,"bad message...");
                 else
                     send_message();
 
@@ -319,20 +502,15 @@ int main()
                 break;
             case 3: //Control-C
                 do_exit = 1;
+                break;
             default:
-                if(ch > 0)
+                if(ch > 0 && isprint(ch)) {
                     message_buffer[message_pos++] = ch;
-                else
-                    continue;
+                    rebuild_status();
+                } else
+                    usleep(100);
         }
 
-        //Redraw prompt
-        mvprintw(1,0,"                                                      ");
-        mvprintw(1,0,"> ");
-        error = print_colorized_message();
-
-        //Update screen
-        refresh();
     } while(!do_exit);
 
     endwin();

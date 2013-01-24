@@ -54,25 +54,24 @@ Ports Oscil::ports = {
 
 void help(msg_t,void*)
 {
-    display("Good Luck...");
-    display("");
-    display("/synth/freq 440.0");
-    display("/synth/oscil0/volume 0.2");
-    display("/synth/enable T");
-    display("For some audio enable the output, make one volume non-zero, and set a frequency");
-    display("");
-    display("/synth/freq");
-    display("/synth/enable, /synth/oscil#/cents, /synth/oscil#/volume, /synth/oscil#/shape,");
-    display("The synthesizer ports are:");
-    display("This application is a simple additive synthesis engine.");
-    display("parameters in a less than simple manner.");
-    display("Welcome to the OSC prompt, where simple OSC messages control" );
+    display("Welcome to the OSC prompt, where simple OSC messages control "
+            "parameters in a less than simple manner.\n"
+            "\n"
+            "This application is a simple additive synthesis engine. "
+            "The synthesizer ports are:\n"
+            "/synth/enable, /synth/oscil#/cents, /synth/oscil#/volume, /synth/oscil#/shape, "
+            "/synth/freq\n"
+            "For some audio enable the output, make one volume non-zero, and set a frequency\n\n"
+            "/synth/enable T\n"
+            "/synth/oscil0/volume 0.2\n"
+            "/synth/freq 440.0\n\n"
+            "Good Luck...");
 }
 
 Ports Synth::ports = {
     PARAMF(Synth, freq,   freq,   lin, 0, 20e3, "Base frequency of note"),
     PARAMT(Synth, enable, enable, "Enable or disable audio output"),
-    RECURS(Synth, Oscil,  oscil,  oscil, 16)
+    RECURS(Synth, Oscil,  oscil,  oscil, 16, "Oscillator bank element")
 };
 
 void apropos(msg_t m, void*);
@@ -96,7 +95,7 @@ Ports ports = {
 
 
     //Normal ports
-    {"synth/", "", &Synth::ports,
+    {"synth/", "::Main ports for synthesis", &Synth::ports,
         [](msg_t m, void*){Synth::ports.dispatch(snip(m), &synth); }},
 };
 

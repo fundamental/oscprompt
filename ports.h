@@ -58,8 +58,8 @@ T lim(T min, T max, T val)
     cast::ports.dispatch(snip(m), &(((type*)v)->var));}}
 
 //Recurs - perform a ranged recursion
-#define RECURS(type, cast, name, var, length) \
-{#name "#" #length "/", ":'recursion':", &cast::ports, [](const char *m, void *v){ \
+#define RECURS(type, cast, name, var, length, desc) \
+{#name "#" #length "/", ":'recursion':" desc, &cast::ports, [](const char *m, void *v){ \
     const char *mm = m; \
     while(!isdigit(*mm))++mm; \
         cast::ports.dispatch(snip(m), &(((type*)v)->var)[atoi(mm)]);}}
