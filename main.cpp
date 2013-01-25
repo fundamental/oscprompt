@@ -8,9 +8,10 @@
 #include <cctype>
 #include <string>
 using namespace rtosc;
+using std::string;
 
-extern ThreadLink<1024,1024> bToU;
-extern ThreadLink<1024,1024> uToB;
+extern ThreadLink bToU;
+extern ThreadLink uToB;
 
 #define MAX_SNARF 10000
 extern char snarf_buffer[MAX_SNARF];
@@ -20,6 +21,9 @@ char message_buffer[1024];
 char message_arguments[32];
 int  message_pos=0;
 int  message_narguments=0;
+
+//Tab completion recommendation
+string tab_recommendation;
 
 //Error detected in user promppt
 int error = 0;
@@ -214,15 +218,39 @@ void die_nicely(msg_t, void*)
     do_exit = 1;
 }
 
-Ports viewports = {
-    {"display", "", 0, display},
-    {"exit", "", 0, die_nicely},
-};
-
 enum presentation_t
 {
     SHORT,
     LONG
+};
+
+void emit_status_field(const char *name, const char *metadata, presentation_t mode);
+
+void update_paths(msg_t m, void*)
+{
+    unsigned fields = rtosc_narguments(m)/2;
+
+    werase(status);
+
+    if(fields)
+        tab_recommendation = rtosc_argument(m,0).s;
+    else {
+        tab_recommendation = "";
+        wprintw(status, "No matching ports...\n");
+    }
+
+
+    for(unsigned i=0; i<fields; ++i)
+        emit_status_field(rtosc_argument(m,2*i).s,
+                          rtosc_argument(m,2*i+1).s,
+                          fields==1 ? LONG : SHORT);
+    wrefresh(status);
+}
+
+Ports viewports = {
+    {"paths",   "", 0, update_paths},
+    {"display", "", 0, display},
+    {"exit",    "", 0, die_nicely},
 };
 
 void emit_status_field(const char *name, const char *metadata, presentation_t mode)
@@ -282,114 +310,47 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
 void rebuild_status(void)
 {
     //Base port level from synth code
-    extern const Ports *backend_ports;
+    const char *src    = strlen(message_buffer) ? message_buffer+1 : "";
+    if(index(src, ' ')) return; //avoid complete strings
 
     //Trim the string to its last subpath.
     //This allows manual filtering of the results
-    char *str = strdup(message_buffer);
+    char       *s1     = strdup(src);
+    char       *s2     = strdup(src);
+    const char *path   = NULL;
+    const char *needle = NULL;
+    char *tmp          = rindex(s2, '/');
 
-    if(index(str,' ')) {//This path is complete
-        free(str);
-        return;
-    }
-
-    char *thresh = rindex(str, '/');
-    if(thresh) {//kill off any digits in the path to allow cheap matching
-        char *digit_elim=thresh;
-        while(*digit_elim++)
-            if(isdigit(*digit_elim))
-                *digit_elim=0;
-    }
-
-    //split strings
-    if(thresh)
-        *thresh = 0;
-
-    const Ports *ports = NULL;
-    if(!*str)
-        ports = backend_ports;
-    else {
-        const Port *port = backend_ports->apropos((std::string(str+1)+'/').c_str());
-        if(port)
-            ports = port->ports;
-    }
-
-    werase(status);
-
-    if(!ports) {
-        wprintw(status,"no match...\n");
+    if(!tmp) {
+       needle = s2;
+       path   = "";
     } else {
-        int num_fields = 0;
-        for(const Port &p:*ports) {
-            if(thresh && strstr(p.name, thresh+1)!=p.name)
-                continue;
-            ++num_fields;
-        }
+        needle = tmp + 1;
 
-        for(const Port &p:*ports) {
-            if(thresh && strstr(p.name, thresh+1)!=p.name)
-                continue;
-            emit_status_field(p.name, p.metadata, num_fields==1 ? LONG : SHORT);
-        }
+        //eliminate digits
+        while(*tmp++)
+            if(isdigit(*tmp))
+                *tmp=0;
+
+        //terminate string
+        rindex(s1, '/')[1] = 0;
+        path   = s1;
     }
 
-    free(str);
+    uToB.write("/path-search", "ss", path, needle);
+    free(s1);
+    free(s2);
 }
 
 void tab_complete(void)
 {
-    //Base port level from synth code
-    extern Ports *backend_ports;
-
-    //Trim the string to its last subpath.
-    //This allows manual filtering of the results
-    char *str = strdup(message_buffer);
-
-    if(index(str,' ')) {//This path is complete
-        free(str);
+    if(tab_recommendation.empty())
         return;
-    }
-
-    char *thresh = rindex(str, '/');
-    if(thresh) {//kill off any digits in the path to allow cheap matching
-        char *digit_elim=thresh;
-        while(*digit_elim++)
-            if(isdigit(*digit_elim))
-                *digit_elim=0;
-    }
-
-    //split strings
-    if(thresh)
-        *thresh = 0;
-
-    const Ports *ports = NULL;
-    if(!*str)
-        ports = backend_ports;
-    else {
-        const Port *port = backend_ports->apropos((std::string(str+1)+'/').c_str());
-        if(port)
-            ports = port->ports;
-    }
-
-    werase(status);
-
-    if(!ports) {
-        wprintw(status,"no match...\n");
-    } else {
-        for(const Port &port:*ports) {
-            if(thresh && strstr(port.name, thresh+1)!=port.name)
-                continue;
-            char *w_ptr = rindex(message_buffer,'/')+1;
-            const char *src = port.name;
-            while(*src && *src != '#' && *src != ':')
-                *w_ptr++ = *src++;
-            message_pos = strlen(message_buffer);
-            free(str);
-            return;
-        }
-    }
-    free(str);
-    wprintw(status,"no match...\n");
+    const char *src = tab_recommendation.c_str();
+    char *w_ptr = rindex(message_buffer,'/')+1;
+    while(*src && *src != '#' && *src != ':')
+        *w_ptr++ = *src++;
+    message_pos = strlen(message_buffer);
 }
 
 void init_audio(void);

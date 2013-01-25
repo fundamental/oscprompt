@@ -12,8 +12,8 @@
 using std::function;
 using namespace rtosc;
 
-ThreadLink<1024,1024> bToU;
-ThreadLink<1024,1024> uToB;
+ThreadLink bToU(1024,1024);
+ThreadLink uToB(1024,1024);
 void display(const char *str){bToU.write("/display", "s", str);}
 
 #include "snarf.cpp"
@@ -77,6 +77,7 @@ Ports Synth::ports = {
 void apropos(msg_t m, void*);
 void describe(msg_t m, void*);
 void midi_register(msg_t m, void*);
+void path_search(msg_t m, void*);
 
 Ports ports = {
     //Meta port
@@ -84,8 +85,8 @@ Ports ports = {
     {"help:",            "::Display help to user",                 0, help},
     {"apropos:s",        "::Find the best match",                  0, apropos},
     {"describe:s",       "::Print out a description of a port",    0, describe},
-    {"midi-register:is", "::Register a midi port <ctl id, path>",  0,
-        midi_register},
+    {"path-search:ss",   "::Return a list of possible paths",      0, path_search},
+    {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
     {"quit:",            "::Quit the program", 0,
         [](msg_t m, void*){bToU.write("/exit","");}},
     {"snarf:",           "::Save an image for parameters", 0,
@@ -94,12 +95,50 @@ Ports ports = {
         [](msg_t,void*){barf();}},
 
 
+
     //Normal ports
     {"synth/", "::Main ports for synthesis", &Synth::ports,
         [](msg_t m, void*){Synth::ports.dispatch(snip(m), &synth); }},
 };
 
 Ports *backend_ports = &ports;
+
+void path_search(msg_t m, void *)
+{
+    //assumed upper bound of 32 ports (may need to be resized)
+    char         types[65];
+    rtosc_arg_t  args[64];
+    size_t       pos    = 0;
+    const Ports *ports  = NULL;
+    const Port  *port   = NULL;
+    const char  *str    = rtosc_argument(m,0).s;
+    const char  *needle = rtosc_argument(m,1).s;
+
+    //zero out data
+    memset(types, 0, sizeof(types));
+    memset(args,  0, sizeof(args));
+
+    if(!*str) {
+        ports = &::ports;
+    } else {
+        const Port *port = ::ports.apropos(rtosc_argument(m,0).s);
+        if(port)
+            ports = port->ports;
+    }
+
+    if(ports) {
+        //RTness not confirmed here
+        for(const Port &p:*ports) {
+            if(strstr(p.name, needle)!=p.name)
+                continue;
+            types[pos]    = types[pos+1] = 's';
+            args[pos++].s = p.name;
+            args[pos++].s = p.metadata;
+        }
+    }
+
+    bToU.writeArray("/paths", types, args);
+}
 
 void apropos(msg_t m, void*)
 {
