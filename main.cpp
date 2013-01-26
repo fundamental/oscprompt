@@ -1,20 +1,15 @@
-#include <ncurses.h>
-#include <string.h>
-#include <unistd.h>
 #include <rtosc/rtosc.h>
 #include <rtosc/ports.h>
 #include <rtosc/thread-link.h>
+#include <lo/lo.h>
+#include <ncurses.h>
+#include <string.h>
+#include <unistd.h>
 #include <cstdlib>
 #include <cctype>
 #include <string>
 using namespace rtosc;
 using std::string;
-
-extern ThreadLink bToU;
-extern ThreadLink uToB;
-
-#define MAX_SNARF 10000
-extern char snarf_buffer[MAX_SNARF];
 
 //Global buffer for user entry
 char message_buffer[1024];
@@ -28,6 +23,8 @@ string tab_recommendation;
 //Error detected in user promppt
 int error = 0;
 
+//Liblo destination
+lo_address lo_addr;
 
 //UI Windows
 WINDOW *prompt;  //The input pane
@@ -86,7 +83,13 @@ void send_message(void)
                 ++str;
         }
     }
-    uToB.writeArray(path, message_arguments, args);
+    char buffer[2048];
+    size_t len = rtosc_amessage(buffer, 2048, path, message_arguments, args);
+    lo_message msg = lo_message_deserialise(buffer, len, NULL);
+    if(lo_addr)
+        lo_send_message(lo_addr, buffer, msg);
+
+
     delete [] args;
 }
 
@@ -337,7 +340,11 @@ void rebuild_status(void)
         path   = s1;
     }
 
-    uToB.write("/path-search", "ss", path, needle);
+    char buffer[2048];
+    size_t len = rtosc_message(buffer, 2048, "/path-search", "ss", path, needle);
+    lo_message msg = lo_message_deserialise(buffer, len, NULL);
+    if(lo_addr)
+        lo_send_message(lo_addr, buffer, msg);
     free(s1);
     free(s2);
 }
@@ -353,17 +360,64 @@ void tab_complete(void)
     message_pos = strlen(message_buffer);
 }
 
-void init_audio(void);
+void error_cb(int i, const char *m, const char *loc)
+{
+    wprintw(log, "liblo :-( %d-%s@%s\n",i,m,loc);
+}
+
+int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
+{
+    //lo_address addr = lo_message_get_source(msg);
+    //if(addr)
+    //    response_url = lo_address_get_url(addr);
+
+    char buffer[2048];
+    memset(buffer, 0, sizeof(buffer));
+    size_t size = 2048;
+    lo_message_serialise(msg, path, buffer, &size);
+    viewports.dispatch(buffer+1, NULL);
+}
+
+void process_message(void)
+{
+    //alias
+    const char *m = message_buffer;
+    //Check for special cases
+    if(strstr(m, "disconnect")==m)
+        lo_addr = NULL;
+    else if(strstr(m, "quit")==m)
+        do_exit = true;
+    else if(strstr(m, "exit")==m)
+        do_exit = true;
+    else if(strstr(m, "connect")==m) {
+        while(*m && !isdigit(*m)) ++m;
+        if(isdigit(*m)) //lets hope lo is robust :p
+            lo_addr = lo_address_new_with_proto(LO_UDP, NULL, m);
+
+    } else { //normal OSC message
+        if(error)
+            wprintw(status,"bad message...");
+        else
+            send_message();
+    }
+
+    //Reset message buffer
+    memset(message_buffer,    0, 1024);
+    memset(message_arguments, 0, 32);
+    message_narguments      = 0;
+    message_pos             = 0;
+}
+
 int main()
 {
     //For misc utf8 chars
     setlocale(LC_ALL, "");
 
-    init_audio();
     memset(message_buffer,   0,sizeof(message_buffer));
     memset(message_arguments,0,sizeof(message_arguments));
     int ch;
     bool error = false;
+
 
     //Initialize NCurses
     initscr();
@@ -396,6 +450,12 @@ int main()
         wrefresh(helper_box);
     }
 
+    //setup liblo - it can choose its own port
+    lo_server server = lo_server_new_with_proto(NULL, LO_UDP, error_cb);
+    lo_method handle = lo_server_add_method(server, NULL, NULL, handler_function, NULL);
+    //lo_addr          = lo_address_new_with_proto(LO_UDP, NULL, "8080");
+    wprintw(log, "lo server running on %d\n", lo_server_get_port(server));
+
     //Loop on prompt until the program should exit
     do {
         //Redraw prompt
@@ -413,8 +473,7 @@ int main()
         wrefresh(status);
 
         //Handle events from backend
-        while(bToU.hasNext())
-            viewports.dispatch(bToU.read()+1, NULL);
+        lo_server_recv_noblock(server, 0);
 
         FILE *file;
         switch(ch = wgetch(prompt)) {
@@ -424,45 +483,33 @@ int main()
                     message_buffer[--message_pos] = 0;
                 rebuild_status();
                 break;
-            case KEY_F(1): //saving snarf
-                file=fopen("osc-prompt.snarf","wb");
-                if(!file) {
-                    wprintw(status,"Unable to snarf file!");
-                    continue;
-                }
-                fwrite(snarf_buffer, rtosc_message_length(snarf_buffer, MAX_SNARF),
-                        1, file);
-                wprintw(status,"snarf saved...");
-                break;
-            case KEY_F(2): //loading snarf
-                file=fopen("osc-prompt.snarf","rb");
-                if(!file) {
-                    wprintw(status,"Unable to unsnarf file!");
-                    continue;
-                }
-                memset(snarf_buffer, 0, MAX_SNARF);
-                fread(snarf_buffer, MAX_SNARF, 1, file);
-                wprintw(status,"snarf loaded...");
-                break;
             case '\t':
                 tab_complete();
                 rebuild_status();
                 break;
             case '\n':
             case '\r':
-                if(error)
-                    wprintw(status,"bad message...");
-                else
-                    send_message();
-
-                //Reset message buffer
-                memset(message_buffer,    0, 1024);
-                memset(message_arguments, 0, 32);
-                message_narguments      = 0;
-                message_pos             = 0;
+                process_message();
                 break;
             case 3: //Control-C
                 do_exit = 1;
+                break;
+            case KEY_RESIZE:
+                log    = newwin(LINES-3, COLS/2-3, 1, 1);
+                status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
+                prompt = newwin(1, COLS, LINES-1,0);
+                scrollok(log, TRUE);
+                wtimeout(prompt, 100);
+                {
+                    WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
+                    box(helper_box,0,0);
+                    wrefresh(helper_box);
+                }
+                {
+                    WINDOW *helper_box = newwin(LINES-1,COLS/2,0,COLS/2);
+                    box(helper_box,0,0);
+                    wrefresh(helper_box);
+                }
                 break;
             default:
                 if(ch > 0 && isprint(ch)) {

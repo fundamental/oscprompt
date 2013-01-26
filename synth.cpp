@@ -2,11 +2,13 @@
 #include <jack/midiport.h>
 #include <rtosc/thread-link.h>
 #include <rtosc/miditable.h>
+#include <lo/lo.h>
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <functional>
+#include <string>
 #include "ports.h"
 
 using std::function;
@@ -43,7 +45,7 @@ jack_port_t   *port, *iport;
 jack_client_t *client;
 
 void echo(const char *m, void*){
-    display(rtosc_argument(m,0).s);
+    bToU.raw_write(uToB.peak());
 }
 
 Ports Oscil::ports = {
@@ -78,17 +80,18 @@ void apropos(msg_t m, void*);
 void describe(msg_t m, void*);
 void midi_register(msg_t m, void*);
 void path_search(msg_t m, void*);
+bool do_exit = false;
 
 Ports ports = {
     //Meta port
-    {"echo:s",           "::Echo all parameters back to the user", 0, echo},
+    {"echo",             ":'hidden':Echo all parameters back",     0, echo},
     {"help:",            "::Display help to user",                 0, help},
     {"apropos:s",        "::Find the best match",                  0, apropos},
     {"describe:s",       "::Print out a description of a port",    0, describe},
     {"path-search:ss",   "::Return a list of possible paths",      0, path_search},
     {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
     {"quit:",            "::Quit the program", 0,
-        [](msg_t m, void*){bToU.write("/exit","");}},
+        [](msg_t m, void*){do_exit=true; bToU.write("/disconnect","");}},
     {"snarf:",           "::Save an image for parameters", 0,
         [](msg_t,void*){snarf();}},
     {"barf:",            "::Apply an image for parameters", 0,
@@ -269,4 +272,58 @@ void init_audio(void)
     //Run audio
     jack_activate(client);
     atexit(cleanup_audio);
+}
+
+
+void error(int i, const char *m, const char *loc)
+{
+    fprintf(stderr, "%d-%s@%s\n",i,m,loc);
+}
+
+
+std::string last_url;//last url to be sent down the pipe
+std::string curr_url;//last url to pop out of the pipe
+int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
+{
+    lo_address addr = lo_message_get_source(msg);
+    if(addr) {
+        const char *tmp = lo_address_get_url(addr);
+        if(tmp != last_url) {
+            uToB.write("/echo", "ss", "OSC_URL", tmp);
+            last_url = tmp;
+        }
+
+    }
+
+    char buffer[2048];
+    memset(buffer, 0, sizeof(buffer));
+    size_t size = 2048;
+    lo_message_serialise(msg, path, buffer, &size);
+    uToB.raw_write(buffer);
+}
+
+int main()
+{
+    init_audio();
+
+    //setup liblo link
+    lo_server server = lo_server_new_with_proto(NULL, LO_UDP, error);
+    lo_method handle = lo_server_add_method(server, NULL, NULL, handler_function, NULL);
+
+    printf("Synth running on port %d\n", lo_server_get_port(server));
+
+    while(!do_exit) {
+        lo_server_recv_noblock(server, 100);
+        while(bToU.hasNext()) {
+            const char *rtmsg = bToU.read();
+            if(!strcmp(rtmsg, "/echo") && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
+                curr_url = rtosc_argument(rtmsg,1).s;
+            else {
+                lo_message msg  = lo_message_deserialise((void*)rtmsg, rtosc_message_length(rtmsg, bToU.buffer_size()), NULL);
+                lo_address addr = lo_address_new_from_url(curr_url.c_str());
+                lo_send_message(addr, rtmsg, msg);
+            }
+        }
+    }
+    return 0;
 }
