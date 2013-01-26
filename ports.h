@@ -17,22 +17,24 @@ T lim(T min, T max, T val)
 #define PARAMF(type, var, name, scale, _min, _max, desc) \
 {#name"::N:f", #scale "," # _min "," #_max ":'parameter':" desc, 0, \
     [](const char *m, void *v) { \
-        if(rtosc_narguments(m)==0) \
+        if(rtosc_narguments(m)==0) {\
             bToU.write("/display", "sf", uToB.peak(), ((type*)v)->var); \
-        else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f')  \
+        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f') {\
             ((type*)v)->var = lim<float>(_min,_max,rtosc_argument(m,0).f); \
-        else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')  \
+            bToU.write(uToB.peak(), "f", ((type*)v)->var); \
+        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')  \
             snarf_addf(((type*)v)->var);}}
 
 //integer parameter
 #define PARAMI(type, var, name, _max, desc) \
 {#name"::N:i", "_,0," #_max ":'parameter':" desc, 0, \
     [](const char *m, void *v) { \
-        if(rtosc_narguments(m)==0) \
+        if(rtosc_narguments(m)==0) { \
             bToU.write("/display", "si", uToB.peak(),((type*)v)->var);    \
-        else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i')   \
+        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {   \
             ((type*)v)->var = lim<unsigned>(0,_max,rtosc_argument(m,0).i); \
-        else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')   \
+            bToU.write(uToB.peak(), "i", ((type*)v)->var); \
+        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')   \
             snarf_addi(((type*)v)->var);}}
 
 //boolean parameter

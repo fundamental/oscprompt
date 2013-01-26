@@ -190,9 +190,10 @@ bool print_colorized_message(WINDOW *window)
  */
 void display(msg_t msg, void*)
 {
+    wprintw(log, "\n\n%s", msg);
     const unsigned nargs = rtosc_narguments(msg);
     for(int i=0; i<nargs; ++i) {
-        wprintw(log, i?"\n   ":"\n\n");
+        wprintw(log, "\n   ");
         switch(rtosc_type(msg, i)) {
             case 's':
                 wattron(log, COLOR_PAIR(3));
@@ -249,12 +250,6 @@ void update_paths(msg_t m, void*)
                           fields==1 ? LONG : SHORT);
     wrefresh(status);
 }
-
-Ports viewports = {
-    {"paths",   "", 0, update_paths},
-    {"display", "", 0, display},
-    {"exit",    "", 0, die_nicely},
-};
 
 void emit_status_field(const char *name, const char *metadata, presentation_t mode)
 {
@@ -375,7 +370,12 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
     memset(buffer, 0, sizeof(buffer));
     size_t size = 2048;
     lo_message_serialise(msg, path, buffer, &size);
-    viewports.dispatch(buffer+1, NULL);
+    if(!strcmp("/paths", buffer))
+        update_paths(buffer, NULL);
+    else if(!strcmp("/exit", buffer))
+        die_nicely(buffer, NULL);
+    else
+        display(buffer, NULL);
 }
 
 void process_message(void)
@@ -438,6 +438,7 @@ int main()
     status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
     prompt = newwin(1, COLS, LINES-1,0);
     scrollok(log, TRUE);
+    idlok(log, TRUE);
     wtimeout(prompt, 100);
     {
         WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
@@ -499,6 +500,7 @@ int main()
                 status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
                 prompt = newwin(1, COLS, LINES-1,0);
                 scrollok(log, TRUE);
+                idlok(log, TRUE);
                 wtimeout(prompt, 100);
                 {
                     WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);

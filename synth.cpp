@@ -9,6 +9,7 @@
 #include <cmath>
 #include <functional>
 #include <string>
+#include <set>
 #include "ports.h"
 
 using std::function;
@@ -283,6 +284,8 @@ void error(int i, const char *m, const char *loc)
 
 std::string last_url;//last url to be sent down the pipe
 std::string curr_url;//last url to pop out of the pipe
+
+std::set<std::string> logger;
 int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
 {
     lo_address addr = lo_message_get_source(msg);
@@ -299,7 +302,14 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
     memset(buffer, 0, sizeof(buffer));
     size_t size = 2048;
     lo_message_serialise(msg, path, buffer, &size);
-    uToB.raw_write(buffer);
+    if(!strcmp(buffer, "/logging-start")) {
+        if(addr)
+            logger.insert(lo_address_get_url(addr));
+    } else if(!strcmp(buffer, "/logging-stop")) {
+        if(addr)
+            logger.erase(lo_address_get_url(addr));
+    } else
+        uToB.raw_write(buffer);
 }
 
 int main()
@@ -320,8 +330,14 @@ int main()
                 curr_url = rtosc_argument(rtmsg,1).s;
             else {
                 lo_message msg  = lo_message_deserialise((void*)rtmsg, rtosc_message_length(rtmsg, bToU.buffer_size()), NULL);
-                lo_address addr = lo_address_new_from_url(curr_url.c_str());
-                lo_send_message(addr, rtmsg, msg);
+                for(std::string str : logger) {
+                    lo_address addr = lo_address_new_from_url(str.c_str());
+                    lo_send_message(addr, rtmsg, msg);
+                }
+                if(logger.find(curr_url) == logger.end()) {
+                    lo_address addr = lo_address_new_from_url(curr_url.c_str());
+                    lo_send_message(addr, rtmsg, msg);
+                }
             }
         }
     }
