@@ -1,0 +1,16 @@
+A generic OSC based prompt for inspecting and manipulating clients.
+
+Prompt accepts:
+ - TAB
+ - disconnect
+ - quit
+ - exit
+ - connect 'port number'
+ - general OSC messages sent to the client
+
+It assumes that the client will respond to /path-search:ss for tab completion
+and field information.
+
+This is currently Beta software and as such expect some interesting behavior
+from time to time.
+Discussion and bug reports are appreciated.
