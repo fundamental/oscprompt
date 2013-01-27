@@ -349,7 +349,14 @@ void tab_complete(void)
     if(tab_recommendation.empty())
         return;
     const char *src = tab_recommendation.c_str();
-    char *w_ptr = rindex(message_buffer,'/')+1;
+    char *w_ptr = rindex(message_buffer,'/');
+    if(w_ptr)
+        ++w_ptr;
+    else {
+        w_ptr = message_buffer+1;
+        message_buffer[0] = '/';
+    }
+
     while(*src && *src != '#' && *src != ':')
         *w_ptr++ = *src++;
     message_pos = strlen(message_buffer);
