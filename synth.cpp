@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cmath>
 #include <functional>
 #include <string>
@@ -80,7 +81,6 @@ Ports Synth::ports = {
 void apropos(msg_t m, void*);
 void describe(msg_t m, void*);
 void midi_register(msg_t m, void*);
-void path_search(msg_t m, void*);
 bool do_exit = false;
 
 Ports ports = {
@@ -89,7 +89,6 @@ Ports ports = {
     {"help:",            "::Display help to user",                 0, help},
     {"apropos:s",        "::Find the best match",                  0, apropos},
     {"describe:s",       "::Print out a description of a port",    0, describe},
-    {"path-search:ss",   "::Return a list of possible paths",      0, path_search},
     {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
     {"quit:",            "::Quit the program", 0,
         [](msg_t m, void*){do_exit=true; bToU.write("/disconnect","");}},
@@ -107,42 +106,6 @@ Ports ports = {
 
 Ports *backend_ports = &ports;
 
-void path_search(msg_t m, void *)
-{
-    //assumed upper bound of 32 ports (may need to be resized)
-    char         types[65];
-    rtosc_arg_t  args[64];
-    size_t       pos    = 0;
-    const Ports *ports  = NULL;
-    const Port  *port   = NULL;
-    const char  *str    = rtosc_argument(m,0).s;
-    const char  *needle = rtosc_argument(m,1).s;
-
-    //zero out data
-    memset(types, 0, sizeof(types));
-    memset(args,  0, sizeof(args));
-
-    if(!*str) {
-        ports = &::ports;
-    } else {
-        const Port *port = ::ports.apropos(rtosc_argument(m,0).s);
-        if(port)
-            ports = port->ports;
-    }
-
-    if(ports) {
-        //RTness not confirmed here
-        for(const Port &p:*ports) {
-            if(strstr(p.name, needle)!=p.name)
-                continue;
-            types[pos]    = types[pos+1] = 's';
-            args[pos++].s = p.name;
-            args[pos++].s = p.metadata;
-        }
-    }
-
-    bToU.writeArray("/paths", types, args);
-}
 
 void apropos(msg_t m, void*)
 {
@@ -182,7 +145,43 @@ inline float warp(unsigned shape, float phase)
 }
 
 MidiTable<64,64> midi(*backend_ports);
-static char current_note = 0;
+
+//Note stack for mono playing
+static char notes[16];
+//static char current_note = 0;
+void push_note(char note)
+{
+    synth.freq = 440.0f * powf(2.0f, (note-69.0f)/12.0f);
+
+    //no duplicates
+    for(int i=0; i<16; ++i)
+        if(notes[i]==note)
+            return;
+
+    for(int i=15;i>=0; --i)
+        notes[i+1] = notes[i];
+    notes[0] = note;
+
+    //current_note = ev.buffer[1];
+    synth.enable = 1;
+}
+void pop_note(char note)
+{
+    int note_pos=-1;
+    for(int i=0; i<16; ++i)
+        if(notes[i]==note)
+            note_pos = i;
+    if(note_pos != -1) {
+        for(int i=note_pos; i<15; ++i)
+            notes[i] = notes[i+1];
+        notes[15] = 0;
+    }
+
+    if(!notes[0])
+        synth.enable = 0;
+    else
+        synth.freq = 440.0f * powf(2.0f, (notes[0]-69.0f)/12.0f);
+}
 
 void midi_register(msg_t m, void*)
 {
@@ -204,13 +203,10 @@ int process(unsigned nframes, void*)
     while(jack_midi_event_get(&ev, midi_buf, event_idx++) == 0) {
         switch(ev.buffer[0]&0xf0) {
             case 0x90: //Note On
-                synth.freq = 440.0f * powf(2.0f, (ev.buffer[1]-69.0f)/12.0f);
-                current_note = ev.buffer[1];
-                synth.enable = 1;
+                push_note(ev.buffer[1]);
                 break;
             case 0x80: //Note Off
-                if(current_note == ev.buffer[1])
-                    current_note = synth.enable = 0;
+                pop_note(ev.buffer[1]);
                 break;
             case 0xB0: //Controller
                 midi.process(ev.buffer[0]&0x0f, ev.buffer[1], ev.buffer[2]);
@@ -286,6 +282,52 @@ std::string last_url;//last url to be sent down the pipe
 std::string curr_url;//last url to pop out of the pipe
 
 std::set<std::string> logger;
+
+void path_search(msg_t m)
+{
+    //assumed upper bound of 32 ports (may need to be resized)
+    char         types[65];
+    rtosc_arg_t  args[64];
+    size_t       pos    = 0;
+    const Ports *ports  = NULL;
+    const Port  *port   = NULL;
+    const char  *str    = rtosc_argument(m,0).s;
+    const char  *needle = rtosc_argument(m,1).s;
+
+    //zero out data
+    memset(types, 0, sizeof(types));
+    memset(args,  0, sizeof(args));
+
+    if(!*str) {
+        ports = &::ports;
+    } else {
+        const Port *port = ::ports.apropos(rtosc_argument(m,0).s);
+        if(port)
+            ports = port->ports;
+    }
+
+    if(ports) {
+        //RTness not confirmed here
+        for(const Port &p:*ports) {
+            if(strstr(p.name, needle)!=p.name)
+                continue;
+            types[pos]    = types[pos+1] = 's';
+            args[pos++].s = p.name;
+            args[pos++].s = p.metadata;
+        }
+    }
+
+    //Reply to requester
+    char buffer[1024];
+    size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
+    if(length) {
+        lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
+        lo_address addr = lo_address_new_from_url(curr_url.c_str());
+        if(addr)
+            lo_send_message(addr, buffer, msg);
+    }
+}
+
 int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
 {
     lo_address addr = lo_message_get_source(msg);
@@ -308,6 +350,8 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
     } else if(!strcmp(buffer, "/logging-stop")) {
         if(addr)
             logger.erase(lo_address_get_url(addr));
+    } else if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
+        path_search(buffer);
     } else
         uToB.raw_write(buffer);
 }
