@@ -446,7 +446,7 @@ int main()
     prompt = newwin(1, COLS, LINES-1,0);
     scrollok(log, TRUE);
     idlok(log, TRUE);
-    wtimeout(prompt, 100);
+    wtimeout(prompt, 10);
     {
         WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
         box(helper_box,0,0);
@@ -487,6 +487,7 @@ int main()
         switch(ch = wgetch(prompt)) {
             case KEY_BACKSPACE:
             case '':
+            case 127: //ascii 'DEL'
                 if(message_pos)
                     message_buffer[--message_pos] = 0;
                 rebuild_status();
@@ -508,7 +509,7 @@ int main()
                 prompt = newwin(1, COLS, LINES-1,0);
                 scrollok(log, TRUE);
                 idlok(log, TRUE);
-                wtimeout(prompt, 100);
+                wtimeout(prompt, 10);
                 {
                     WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
                     box(helper_box,0,0);
@@ -524,8 +525,9 @@ int main()
                 if(ch > 0 && isprint(ch)) {
                     message_buffer[message_pos++] = ch;
                     rebuild_status();
-                } else
+                } else {
                     usleep(100);
+                }
         }
 
     } while(!do_exit);

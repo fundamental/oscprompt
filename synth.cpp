@@ -51,7 +51,7 @@ void echo(const char *m, void*){
 }
 
 Ports Oscil::ports = {
-    PARAMF(Oscil, cents,   cents,  lin, -1e5, 1e5, "Detune in cents"),
+    PARAMF(Oscil, cents,   cents,  lin, -1200, 1200, "Detune in cents"),
     PARAMF(Oscil, volume,  volume, lin, 0.0,  1.0, "Volume on linear scale"),
     PARAMI(Oscil, shape,   shape,  2, "Shape of Oscillator: {sine, saw, square}")
 };
@@ -255,6 +255,8 @@ void init_audio(void)
 {
     //setup miditable
     midi.event_cb = [](const char *m){ports.dispatch(m+1, NULL);};
+    midi.error_cb = [](const char *m1, const char *m2)
+    {bToU.write("/error", "ss", m1, m2);};
 
     //Setup ports
     client = jack_client_open("oscprompt-demo", JackNullOption, NULL, NULL);
@@ -370,7 +372,9 @@ int main()
         lo_server_recv_noblock(server, 100);
         while(bToU.hasNext()) {
             const char *rtmsg = bToU.read();
-            if(!strcmp(rtmsg, "/echo") && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
+            if(!strcmp(rtmsg, "/echo")
+                    && !strcmp(rtosc_argument_string(rtmsg),"ss")
+                    && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
                 curr_url = rtosc_argument(rtmsg,1).s;
             else {
                 lo_message msg  = lo_message_deserialise((void*)rtmsg, rtosc_message_length(rtmsg, bToU.buffer_size()), NULL);
