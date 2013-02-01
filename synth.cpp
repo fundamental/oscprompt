@@ -46,7 +46,7 @@ struct Synth
 jack_port_t   *port, *iport;
 jack_client_t *client;
 
-void echo(const char *m, void*){
+void echo(const char *m, RtData){
     bToU.raw_write(uToB.peak());
 }
 
@@ -56,7 +56,7 @@ Ports Oscil::ports = {
     PARAMI(Oscil, shape,   shape,  2, "Shape of Oscillator: {sine, saw, square}")
 };
 
-void help(msg_t,void*)
+void help(msg_t,RtData)
 {
     display("Welcome to the OSC prompt, where simple OSC messages control "
             "parameters in a less than simple manner.\n"
@@ -78,9 +78,9 @@ Ports Synth::ports = {
     RECURS(Synth, Oscil,  oscil,  oscil, 16, "Oscillator bank element")
 };
 
-void apropos(msg_t m, void*);
-void describe(msg_t m, void*);
-void midi_register(msg_t m, void*);
+void apropos(msg_t m, RtData);
+void describe(msg_t m, RtData);
+void midi_register(msg_t m, RtData);
 bool do_exit = false;
 
 Ports ports = {
@@ -91,23 +91,23 @@ Ports ports = {
     {"describe:s",       "::Print out a description of a port",    0, describe},
     {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
     {"quit:",            "::Quit the program", 0,
-        [](msg_t m, void*){do_exit=true; bToU.write("/disconnect","");}},
+        [](msg_t m, RtData){do_exit=true; bToU.write("/disconnect","");}},
     {"snarf:",           "::Save an image for parameters", 0,
-        [](msg_t,void*){snarf();}},
+        [](msg_t,RtData){snarf();}},
     {"barf:",            "::Apply an image for parameters", 0,
-        [](msg_t,void*){barf();}},
+        [](msg_t,RtData){barf();}},
 
 
 
     //Normal ports
     {"synth/", "::Main ports for synthesis", &Synth::ports,
-        [](msg_t m, void*){Synth::ports.dispatch(snip(m), &synth); }},
+        [](msg_t m, RtData d){Synth::ports.dispatch(d.loc, d.loc_size, snip(m), &synth); }},
 };
 
 Ports *backend_ports = &ports;
 
 
-void apropos(msg_t m, void*)
+void apropos(msg_t m, RtData)
 {
     const char *s = rtosc_argument(m,0).s;
     if(*s=='/') ++s;
@@ -118,7 +118,7 @@ void apropos(msg_t m, void*)
         display("unknown path...");
 }
 
-void describe(msg_t m, void*)
+void describe(msg_t m, RtData)
 {
     const char *s = rtosc_argument(m,0).s;
     const char *ss = rtosc_argument(m,0).s;
@@ -183,7 +183,7 @@ void pop_note(char note)
         synth.freq = 440.0f * powf(2.0f, (notes[0]-69.0f)/12.0f);
 }
 
-void midi_register(msg_t m, void*)
+void midi_register(msg_t m, RtData)
 {
     midi.addElm(0,
             rtosc_argument(m,0).i,
@@ -192,9 +192,11 @@ void midi_register(msg_t m, void*)
 
 int process(unsigned nframes, void*)
 {
+    char loc_buf[1024];
+    memset(loc_buf, 0, sizeof(loc_buf));
     //Handle user events
     while(uToB.hasNext())
-        ports.dispatch(uToB.read()+1, NULL);
+        ports.dispatch(loc_buf, 1024, uToB.read()+1, NULL);
 
     //Handle midi events
     void *midi_buf = jack_port_get_buffer(iport, nframes);
@@ -254,7 +256,10 @@ void cleanup_audio(void)
 void init_audio(void)
 {
     //setup miditable
-    midi.event_cb = [](const char *m){ports.dispatch(m+1, NULL);};
+    midi.event_cb = [](const char *m){
+        char buffer[1024];
+        memset(buffer,0,sizeof(buffer));
+        ports.dispatch(buffer, 1024, m+1, NULL);};
     midi.error_cb = [](const char *m1, const char *m2)
     {bToU.write("/error", "ss", m1, m2);};
 

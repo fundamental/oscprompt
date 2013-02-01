@@ -8,7 +8,7 @@ void barf(void)
 {
     unsigned elms = rtosc_bundle_elements(snarf_buffer, -1);
     for(unsigned i=0; i<elms; ++i)
-        backend_ports->dispatch(rtosc_bundle_fetch(snarf_buffer,i)+1, NULL);
+        backend_ports->dispatch(NULL, 0, rtosc_bundle_fetch(snarf_buffer,i)+1, NULL);
 }
 
 bool snarf_p(const char *meta)
@@ -39,7 +39,7 @@ void snarf_port(const char *port)
     //Snarf it
     rtosc_message(message_buf, 1024, snarf_path, "N");
 
-    backend_ports->dispatch(message_buf+1, NULL);
+    backend_ports->dispatch(NULL, 0, message_buf+1, NULL);
 
     //Clear out the port
     char *buf = rindex(snarf_path, '/')+1;
