@@ -329,7 +329,7 @@ void path_search(msg_t m)
     size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
     if(length) {
         lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
-        lo_address addr = lo_address_new_from_url(curr_url.c_str());
+        lo_address addr = lo_address_new_from_url(last_url.c_str());
         if(addr)
             lo_send_message(addr, buffer, msg);
     }

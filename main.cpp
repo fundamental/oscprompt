@@ -398,8 +398,13 @@ void process_message(void)
         do_exit = true;
     else if(strstr(m, "connect")==m) {
         while(*m && !isdigit(*m)) ++m;
-        if(isdigit(*m)) //lets hope lo is robust :p
+        if(isdigit(*m)) { //lets hope lo is robust :p
             lo_addr = lo_address_new_with_proto(LO_UDP, NULL, m);
+
+            //populate fields
+            if(lo_addr)
+                lo_send(lo_addr, "/path-search", "ss", "", "");
+        }
 
     } else { //normal OSC message
         if(error)
