@@ -92,10 +92,10 @@ Ports ports = {
     {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
     {"quit:",            "::Quit the program", 0,
         [](msg_t m, RtData){do_exit=true; bToU.write("/disconnect","");}},
-    {"snarf:",           "::Save an image for parameters", 0,
-        [](msg_t,RtData){snarf();}},
-    {"barf:",            "::Apply an image for parameters", 0,
-        [](msg_t,RtData){barf();}},
+    //{"snarf:",           "::Save an image for parameters", 0,
+    //    [](msg_t,RtData){snarf();}},
+    //{"barf:",            "::Apply an image for parameters", 0,
+    //    [](msg_t,RtData){barf();}},
 
 
 
