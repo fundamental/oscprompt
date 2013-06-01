@@ -21,9 +21,9 @@ T lim(T min, T max, T val)
             bToU.write("/display", "sf", d.loc, ((type*)d.obj)->var); \
         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f') {\
             ((type*)d.obj)->var = lim<float>(_min,_max,rtosc_argument(m,0).f); \
-            bToU.write(d.loc, "f", ((type*)d.obj)->var); \
-        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')  \
-            snarf_addf(((type*)d.obj)->var);}}
+            bToU.write(d.loc, "f", ((type*)d.obj)->var);}}}
+        //} else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')  \
+        //    snarf_addf(((type*)d.obj)->var);}}
 
 //integer parameter
 #define PARAMI(type, var, name, _max, desc) \
@@ -33,9 +33,9 @@ T lim(T min, T max, T val)
             bToU.write("/display", "si", d.loc,((type*)d.obj)->var);    \
         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {   \
             ((type*)d.obj)->var = lim<unsigned>(0,_max,rtosc_argument(m,0).i); \
-            bToU.write(d.loc, "i", ((type*)d.obj)->var); \
-        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')   \
-            snarf_addi(((type*)d.obj)->var);}}
+            bToU.write(d.loc, "i", ((type*)d.obj)->var);}}}
+        //} else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')   \
+        //    snarf_addi(((type*)d.obj)->var);}}
 
 //boolean parameter
 #define PARAMT(type, var, name, desc) \
@@ -56,12 +56,12 @@ T lim(T min, T max, T val)
 
 //Recur - perform a simple recursion
 #define RECUR(type, cast, name, var, desc) \
-{#name"/", ":'recursion':" desc, &cast::ports, [](const char *m, RtData d){\
-    cast::ports.dispatch(d.loc, d.loc_size, snip(m), &(((type*)d.obj)->var));}}
+{#name"/", ":'recursion':" desc, &cast::ports, [](const char *m, RtData &d){\
+    d.obj = &(((type*)d.obj)->var) cast::ports.dispatch(snip(m), d);}}
 
 //Recurs - perform a ranged recursion
 #define RECURS(type, cast, name, var, length, desc) \
 {#name "#" #length "/", ":'recursion':" desc, &cast::ports, [](const char *m, RtData d){ \
     const char *mm = m; \
     while(!isdigit(*mm))++mm; \
-        cast::ports.dispatch(d.loc, d.loc_size, snip(m), &(((type*)d.obj)->var)[atoi(mm)]);}}
+        d.obj = &(((type*)d.obj)->var)[atoi(mm)]; cast::ports.dispatch(snip(m), d);}}

@@ -101,7 +101,7 @@ Ports ports = {
 
     //Normal ports
     {"synth/", "::Main ports for synthesis", &Synth::ports,
-        [](msg_t m, RtData d){Synth::ports.dispatch(d.loc, d.loc_size, snip(m), &synth); }},
+        [](msg_t m, RtData &d){d.obj = &synth; Synth::ports.dispatch(snip(m), d); }},
 };
 
 Ports *backend_ports = &ports;
@@ -194,9 +194,13 @@ int process(unsigned nframes, void*)
 {
     char loc_buf[1024];
     memset(loc_buf, 0, sizeof(loc_buf));
+    RtData d;
+    d.loc = loc_buf;
+    d.loc_size = 1024;
+    d.obj = NULL;
     //Handle user events
     while(uToB.hasNext())
-        ports.dispatch(loc_buf, 1024, uToB.read()+1, NULL);
+        ports.dispatch(uToB.read()+1, d);
 
     //Handle midi events
     void *midi_buf = jack_port_get_buffer(iport, nframes);
@@ -259,7 +263,10 @@ void init_audio(void)
     midi.event_cb = [](const char *m){
         char buffer[1024];
         memset(buffer,0,sizeof(buffer));
-        ports.dispatch(buffer, 1024, m+1, NULL);};
+        RtData d;
+        d.loc = buffer;
+        d.loc_size = 1024;
+        ports.dispatch(m+1, d);};
     midi.error_cb = [](const char *m1, const char *m2)
     {bToU.write("/error", "ss", m1, m2);};
 

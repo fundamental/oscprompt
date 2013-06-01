@@ -5,3 +5,6 @@ oscprompt-backend: synth.cpp
 
 oscprompt-frontend: main.cpp
 	g++ -std=c++0x main.cpp -lrtosc -lcurses -lm -llo -o oscprompt-frontend -g
+
+clean:
+	rm *.o oscprompt-frontend oscprompt-backend

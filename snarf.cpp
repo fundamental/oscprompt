@@ -1,9 +1,11 @@
+
 #define MAX_SNARF 10000
 char snarf_buffer[MAX_SNARF];
 char snarf_path[128];
 
 extern Ports *backend_ports;
 
+#if 0
 void barf(void)
 {
     unsigned elms = rtosc_bundle_elements(snarf_buffer, -1);
@@ -115,3 +117,4 @@ void snarf(void)
     snarf_path[0] = '/';
     snarf_ports(backend_ports);
 }
+#endif

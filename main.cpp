@@ -210,9 +210,12 @@ void display(msg_t msg, void*)
                 wprintw(log, "%f", rtosc_argument(msg,i).f);
                 wattroff(log, COLOR_PAIR(4));
                 break;
+            case 'b':
+                wprintw(log, "<b>");
+                break;
         }
     }
-    wrefresh(log);
+    //wrefresh(log);
 }
 
 int do_exit = 0;
@@ -373,9 +376,9 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
     //if(addr)
     //    response_url = lo_address_get_url(addr);
 
-    char buffer[2048];
+    static char buffer[4096];
     memset(buffer, 0, sizeof(buffer));
-    size_t size = 2048;
+    size_t size = 4096;
     lo_message_serialise(msg, path, buffer, &size);
     if(!strcmp("/paths", buffer))
         update_paths(buffer, NULL);
