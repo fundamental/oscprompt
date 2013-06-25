@@ -13,55 +13,54 @@ T lim(T min, T max, T val)
     return val<max?(val>min?val:min):max;
 }
 
+#define DOC(x) ":doc\0=" x "\0"
+
 //floating point parameter - with lookup code
 #define PARAMF(type, var, name, scale, _min, _max, desc) \
-{#name"::N:f", #scale "," # _min "," #_max ":'parameter':" desc, 0, \
+{#name"::N:f", ":scale\0="#scale "\0:min\0=" # _min "\0:max\0=" #_max "\0:parameter\0" \
+    DOC(desc), 0, \
     [](const char *m, RtData d) { \
         if(rtosc_narguments(m)==0) {\
-            bToU.write("/display", "sf", d.loc, ((type*)d.obj)->var); \
+            bToU.write(d.loc, "f", ((type*)d.obj)->var); \
         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f') {\
             ((type*)d.obj)->var = lim<float>(_min,_max,rtosc_argument(m,0).f); \
             bToU.write(d.loc, "f", ((type*)d.obj)->var);}}}
-        //} else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')  \
-        //    snarf_addf(((type*)d.obj)->var);}}
 
 //integer parameter
 #define PARAMI(type, var, name, _max, desc) \
-{#name"::N:i", "_,0," #_max ":'parameter':" desc, 0, \
+{#name"::N:i", ":max\0=" #_max "\0:parameter\0" DOC(desc), 0, \
     [](const char *m, RtData d) { \
         if(rtosc_narguments(m)==0) { \
-            bToU.write("/display", "si", d.loc,((type*)d.obj)->var);    \
+            bToU.write(d.loc, "i", ((type*)d.obj)->var);    \
         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {   \
             ((type*)d.obj)->var = lim<unsigned>(0,_max,rtosc_argument(m,0).i); \
             bToU.write(d.loc, "i", ((type*)d.obj)->var);}}}
-        //} else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='N')   \
-        //    snarf_addi(((type*)d.obj)->var);}}
 
 //boolean parameter
 #define PARAMT(type, var, name, desc) \
-{#name":T:F", ":'parameter':" desc, 0, \
+{#name":T:F", ":parameter\0" DOC(desc), 0, \
     [](const char *m, RtData d) { \
         ((type*)d.obj)->var = rtosc_argument(m, 0).T;}}
 
 //optional subclass
 #define OPTION(type, cast, name, var) \
-{#name "/", ":'option':", &cast ::ports, \
+{#name "/", ":option\0", &cast ::ports, \
     [](const char *m, RtData d) { \
         cast *c = dynamic_cast<cast*>(((type*)d.obj)->var); \
         if(c) cast::ports.dispatch(snip(m), c); }}
 
 //Dummy - a placeholder port
 #define DUMMY(name) \
-{#name, ":'dummy':", 0, [](const char *, RtData){}}
+{#name, ":dummy\0", 0, [](const char *, RtData){}}
 
 //Recur - perform a simple recursion
 #define RECUR(type, cast, name, var, desc) \
-{#name"/", ":'recursion':" desc, &cast::ports, [](const char *m, RtData &d){\
+{#name"/", ":recursion\0" DOC(desc), &cast::ports, [](const char *m, RtData &d){\
     d.obj = &(((type*)d.obj)->var) cast::ports.dispatch(snip(m), d);}}
 
 //Recurs - perform a ranged recursion
 #define RECURS(type, cast, name, var, length, desc) \
-{#name "#" #length "/", ":'recursion':" desc, &cast::ports, [](const char *m, RtData d){ \
+{#name "#" #length "/", ":recursion\0" DOC(desc), &cast::ports, [](const char *m, RtData d){ \
     const char *mm = m; \
     while(!isdigit(*mm))++mm; \
         d.obj = &(((type*)d.obj)->var)[atoi(mm)]; cast::ports.dispatch(snip(m), d);}}

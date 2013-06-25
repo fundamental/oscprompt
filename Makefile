@@ -1,10 +1,14 @@
 all: oscprompt-backend oscprompt-frontend
 
+LIBS = -lrtosc -lrtosc-cpp -llo -lm
+
+CXX = clang++
+
 oscprompt-backend: synth.cpp
-	g++ -std=c++0x synth.cpp -lrtosc -llo -lm -ljack -o oscprompt-backend -g
+	$(CXX) -std=c++11 synth.cpp $(LIBS) -ljack -o oscprompt-backend -g -Wall -Wextra
 
 oscprompt-frontend: main.cpp
-	g++ -std=c++0x main.cpp -lrtosc -lcurses -lm -llo -o oscprompt-frontend -g
+	$(CXX) -std=c++11 main.cpp $(LIBS) -lcurses -o oscprompt-frontend -g -Wall -Wextra
 
 clean:
-	rm *.o oscprompt-frontend oscprompt-backend
+	rm -f *.o oscprompt-frontend oscprompt-backend

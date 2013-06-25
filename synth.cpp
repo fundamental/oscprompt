@@ -46,7 +46,7 @@ struct Synth
 jack_port_t   *port, *iport;
 jack_client_t *client;
 
-void echo(const char *m, RtData){
+void echo(const char *, RtData){
     bToU.raw_write(uToB.peak());
 }
 
@@ -85,13 +85,13 @@ bool do_exit = false;
 
 Ports ports = {
     //Meta port
-    {"echo",             ":'hidden':Echo all parameters back",     0, echo},
-    {"help:",            "::Display help to user",                 0, help},
-    {"apropos:s",        "::Find the best match",                  0, apropos},
-    {"describe:s",       "::Print out a description of a port",    0, describe},
-    {"midi-register:is", "::Register a midi port <ctl id, path>",  0, midi_register},
-    {"quit:",            "::Quit the program", 0,
-        [](msg_t m, RtData){do_exit=true; bToU.write("/disconnect","");}},
+    {"echo",             ":hidden\0" DOC("Echo all parameters back"), 0, echo},
+    {"help:",            DOC("Display help to user"),                 0, help},
+    {"apropos:s",        DOC("Find the best match"),                  0, apropos},
+    {"describe:s",       DOC("Print out a description of a port"),    0, describe},
+    {"midi-register:is", DOC("Register a midi port <ctl id, path>"),  0, midi_register},
+    {"quit:",            DOC("Quit the program"), 0,
+        [](msg_t, RtData){do_exit=true; bToU.write("/disconnect","");}},
     //{"snarf:",           "::Save an image for parameters", 0,
     //    [](msg_t,RtData){snarf();}},
     //{"barf:",            "::Apply an image for parameters", 0,
@@ -100,9 +100,10 @@ Ports ports = {
 
 
     //Normal ports
-    {"synth/", "::Main ports for synthesis", &Synth::ports,
+    {"synth/", DOC("Main ports for synthesis"), &Synth::ports,
         [](msg_t m, RtData &d){d.obj = &synth; Synth::ports.dispatch(snip(m), d); }},
 };
+
 
 Ports *backend_ports = &ports;
 
@@ -144,7 +145,7 @@ inline float warp(unsigned shape, float phase)
     return 0.0f;
 }
 
-MidiTable<64,64> midi(*backend_ports);
+MidiTable midi(*backend_ports);
 
 //Note stack for mono playing
 static char notes[16];
@@ -304,7 +305,6 @@ void path_search(msg_t m)
     rtosc_arg_t  args[64];
     size_t       pos    = 0;
     const Ports *ports  = NULL;
-    const Port  *port   = NULL;
     const char  *str    = rtosc_argument(m,0).s;
     const char  *needle = rtosc_argument(m,1).s;
 
@@ -325,15 +325,19 @@ void path_search(msg_t m)
         for(const Port &p:*ports) {
             if(strstr(p.name, needle)!=p.name)
                 continue;
-            types[pos]    = types[pos+1] = 's';
+            types[pos]    = 's';
             args[pos++].s = p.name;
-            args[pos++].s = p.metadata;
+            types[pos]         = 'b';
+            args[pos].b.len    = p.meta().length();
+            args[pos++].b.data = (uint8_t*) p.metadata;
         }
     }
 
     //Reply to requester
     char buffer[1024];
+
     size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
+
     if(length) {
         lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
         lo_address addr = lo_address_new_from_url(last_url.c_str());
@@ -342,7 +346,7 @@ void path_search(msg_t m)
     }
 }
 
-int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
+int handler_function(const char *path, const char *, lo_arg **, int, lo_message msg, void *)
 {
     lo_address addr = lo_message_get_source(msg);
     if(addr) {
@@ -368,6 +372,8 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
         path_search(buffer);
     } else
         uToB.raw_write(buffer);
+
+    return 0;
 }
 
 int main()
@@ -376,7 +382,7 @@ int main()
 
     //setup liblo link
     lo_server server = lo_server_new_with_proto(NULL, LO_UDP, error);
-    lo_method handle = lo_server_add_method(server, NULL, NULL, handler_function, NULL);
+    lo_server_add_method(server, NULL, NULL, handler_function, NULL);
 
     printf("Synth running on port %d\n", lo_server_get_port(server));
 
@@ -403,3 +409,5 @@ int main()
     }
     return 0;
 }
+
+//TODO get broadcasting to work properly

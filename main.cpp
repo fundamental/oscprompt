@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <string>
+#include <sstream>
 using namespace rtosc;
 using std::string;
 
@@ -31,6 +32,11 @@ WINDOW *prompt;  //The input pane
 WINDOW *log;     //The outupt pane
 WINDOW *status;  //The pattern matching and documentation pane
 
+//Status tab globals
+string status_url;
+string status_name;
+string status_metadata;
+string status_value;
 
 /**
  * Parses simple messages from strings into something that librtosc can accept
@@ -192,7 +198,7 @@ void display(msg_t msg, void*)
 {
     wprintw(log, "\n\n%s", msg);
     const unsigned nargs = rtosc_narguments(msg);
-    for(int i=0; i<nargs; ++i) {
+    for(unsigned i=0; i<nargs; ++i) {
         wprintw(log, "\n   ");
         switch(rtosc_type(msg, i)) {
             case 's':
@@ -246,10 +252,37 @@ void update_paths(msg_t m, void*)
         wprintw(status, "No matching ports...\n");
     }
 
+    //Gather information for the long format of the status field
+    char *tmp = rindex(message_buffer, '/');
+    if(fields == 1 && tmp) {
+        status_name = rtosc_argument(m, 0).s;
+        *tmp = 0;
+        status_url = string(message_buffer) + "/" + status_name;
+        *tmp = '/';
+
+        auto trim = status_url.find(':');
+        if(trim != string::npos)
+            status_url.erase(trim);
+
+        auto blob = rtosc_argument(m, 1).b;
+        status_metadata = string((const char *)blob.data, blob.len);
+
+
+        //Request the value of the field when possible
+        auto meta = rtosc::Port::MetaContainer(status_metadata.c_str());
+        if(meta.find("parameter") != meta.end())
+            lo_send(lo_addr, status_url.c_str(), "");
+    } else {
+        status_name     = "";
+        status_url      = "";
+        status_value    = "";
+        status_metadata = "";
+    }
+
 
     for(unsigned i=0; i<fields; ++i)
         emit_status_field(rtosc_argument(m,2*i).s,
-                          rtosc_argument(m,2*i+1).s,
+                          (const char*)rtosc_argument(m,2*i+1).b.data,
                           fields==1 ? LONG : SHORT);
     wrefresh(status);
 }
@@ -259,9 +292,9 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
     if(!metadata)
         metadata = "";
 
-    const char *doc_str = rindex(metadata, ':');
-    if(doc_str)
-        doc_str++;
+    rtosc::Port::MetaContainer itr(metadata);
+
+    const char *doc_str = itr["doc"];
 
     int color = 0;
     if(strstr(name, ":f"))
@@ -286,24 +319,25 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
     wprintw(status,"    %s\n", doc_str);
 
     if(mode==LONG) {
-        if(index(metadata, ':') && index(metadata, ':')[1] != ':') {
+        wattron(status, A_BOLD);
+        wprintw(status, "  Properties:\n");
+        wattroff(status, A_BOLD);
+        for(auto val : itr)
+            wprintw(status, "    %s: %s\n", val.title, val.value);
+
+        wprintw(status, "\n");
+
+        if(itr.find("parameter") != itr.end()) {
             wattron(status, A_BOLD);
-            wprintw(status, "  Properties:");
+            wprintw(status, "  Value:\n");
             wattroff(status, A_BOLD);
-            int quotes = 0;
-            for(const char *p=index(metadata, ':')+1; *p && *p != ':'; ++p) {
-                if(*p=='\'' && !(quotes++%2))
-                    wprintw(status, "\n    ");
-                wprintw(status, "%c", *p);
-            }
+
+            wprintw(status, "    %s ", status_value.c_str());
+
+            if(itr["units"])
+                wprintw(status, "%s", itr["units"]);
             wprintw(status, "\n");
-        }
-        if(*metadata && *metadata != ':') {
-            wattron(status, A_BOLD);
-            wprintw(status, "  Midi Conversion:\n    ");
-            wattroff(status, A_BOLD);
-            for(const char *p=metadata; *p && *p != ':'; ++p)
-                wprintw(status, "%c", *p);
+            //wprintw(status, "'%s'"
         }
     }
 }
@@ -370,7 +404,15 @@ void error_cb(int i, const char *m, const char *loc)
     wprintw(log, "liblo :-( %d-%s@%s\n",i,m,loc);
 }
 
-int handler_function(const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data)
+template<class T>
+string toString(const T &t)
+{
+    std::stringstream converter;
+    converter << t;
+    return converter.str();
+}
+
+int handler_function(const char *path, const char *, lo_arg **, int, lo_message msg, void *)
 {
     //lo_address addr = lo_message_get_source(msg);
     //if(addr)
@@ -380,12 +422,26 @@ int handler_function(const char *path, const char *types, lo_arg **argv, int arg
     memset(buffer, 0, sizeof(buffer));
     size_t size = 4096;
     lo_message_serialise(msg, path, buffer, &size);
-    if(!strcmp("/paths", buffer))
+    if(!strcmp("/paths", buffer)) // /paths:sbsbsbsbsb...
         update_paths(buffer, NULL);
     else if(!strcmp("/exit", buffer))
         die_nicely(buffer, NULL);
-    else
+    else if(status_url == path) {
+        if(!strcmp(rtosc_argument_string(buffer), "f"))
+            status_value = toString(rtosc_argument(buffer,0).f);
+        else if(!strcmp(rtosc_argument_string(buffer), "i"))
+            status_value = toString(rtosc_argument(buffer,0).i);
+        else if(!strcmp(rtosc_argument_string(buffer), "T"))
+            status_value = "T";
+        else if(!strcmp(rtosc_argument_string(buffer), "F"))
+            status_value = "F";
+        werase(status);
+        emit_status_field(status_name.c_str(), status_metadata.c_str(), LONG);
+        wrefresh(status);
+    } else
         display(buffer, NULL);
+
+    return 0;
 }
 
 void process_message(void)
@@ -431,7 +487,6 @@ int main()
     memset(message_buffer,   0,sizeof(message_buffer));
     memset(message_arguments,0,sizeof(message_arguments));
     int ch;
-    bool error = false;
 
 
     //Initialize NCurses
@@ -468,7 +523,7 @@ int main()
 
     //setup liblo - it can choose its own port
     lo_server server = lo_server_new_with_proto(NULL, LO_UDP, error_cb);
-    lo_method handle = lo_server_add_method(server, NULL, NULL, handler_function, NULL);
+    lo_server_add_method(server, NULL, NULL, handler_function, NULL);
     //lo_addr          = lo_address_new_with_proto(LO_UDP, NULL, "8080");
     wprintw(log, "lo server running on %d\n", lo_server_get_port(server));
 
@@ -491,7 +546,7 @@ int main()
         //Handle events from backend
         lo_server_recv_noblock(server, 0);
 
-        FILE *file;
+        //FILE *file;
         switch(ch = wgetch(prompt)) {
             case KEY_BACKSPACE:
             case '':
