@@ -35,7 +35,7 @@ WINDOW *status;  //The pattern matching and documentation pane
 //Status tab globals
 string status_url;
 string status_name;
-string status_metadata;
+char *status_metadata;
 string status_value;
 
 /**
@@ -264,19 +264,21 @@ void update_paths(msg_t m, void*)
         if(trim != string::npos)
             status_url.erase(trim);
 
+        assert(rtosc_type(m, 1) == 'b');
         auto blob = rtosc_argument(m, 1).b;
-        status_metadata = string((const char *)blob.data, blob.len);
+        delete status_metadata;
+        status_metadata = new char[blob.len];
+        memcpy(status_metadata, blob.data, blob.len);
 
 
         //Request the value of the field when possible
-        auto meta = rtosc::Port::MetaContainer(status_metadata.c_str());
+        auto meta = rtosc::Port::MetaContainer(status_metadata);
         if(meta.find("parameter") != meta.end())
             lo_send(lo_addr, status_url.c_str(), "");
     } else {
         status_name     = "";
         status_url      = "";
         status_value    = "";
-        status_metadata = "";
     }
 
 
@@ -294,7 +296,7 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
 
     rtosc::Port::MetaContainer itr(metadata);
 
-    const char *doc_str = itr["doc"];
+    const char *doc_str = itr["documentation"];
 
     int color = 0;
     if(strstr(name, ":f"))
@@ -322,8 +324,12 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
         wattron(status, A_BOLD);
         wprintw(status, "  Properties:\n");
         wattroff(status, A_BOLD);
-        for(auto val : itr)
-            wprintw(status, "    %s: %s\n", val.title, val.value);
+        for(auto val : itr) {
+            if(val.value)
+                wprintw(status, "    %s: %s\n", val.title, val.value);
+            else
+                wprintw(status, "    %s\n", val.title);
+        }
 
         wprintw(status, "\n");
 
@@ -436,7 +442,7 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
         else if(!strcmp(rtosc_argument_string(buffer), "F"))
             status_value = "F";
         werase(status);
-        emit_status_field(status_name.c_str(), status_metadata.c_str(), LONG);
+        emit_status_field(status_name.c_str(), status_metadata, LONG);
         wrefresh(status);
     } else
         display(buffer, NULL);

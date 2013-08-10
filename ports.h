@@ -13,7 +13,7 @@ T lim(T min, T max, T val)
     return val<max?(val>min?val:min):max;
 }
 
-#define DOC(x) ":doc\0=" x "\0"
+#define DOC(x) ":documentation\0=" x "\0"
 
 //floating point parameter - with lookup code
 #define PARAMF(type, var, name, scale, _min, _max, desc) \
