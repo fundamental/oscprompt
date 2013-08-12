@@ -75,6 +75,11 @@ void send_message(void)
                     args[i].f = atof(str);
                 while(isdigit(*str) || *str=='-' || *str=='.') ++str;
                 break;
+            case 'c':
+                while(*str++ != 'c');
+                args[i].i = atoi(str);
+                while(*str && *str != ' ') ++str;
+                break;
             case 's':
                 while(*str!='"') ++str;
                 args[i].s = b;
@@ -157,6 +162,23 @@ bool print_colorized_message(WINDOW *window)
                 }
                 break;
 
+            case 'c': //Char type
+                message_arguments[message_narguments++] = 'c';
+                wattron(window, COLOR_PAIR(6));
+                wprintw(window, "%c",*str++);
+                while(*str && isdigit(*str))
+                    wprintw(window, "%c",*str++);
+                wattroff(window, COLOR_PAIR(6));
+
+                //Stuff was left on the end of the the number
+                while(*str && *str != ' ') {
+                    error = true;
+                    wattron(window, COLOR_PAIR(2));
+                    wprintw(window, "%c", *str++);
+                    wattroff(window, COLOR_PAIR(2));
+                }
+                break;
+
             case 'T':
             case 'F':
                 message_arguments[message_narguments++] = *str;
@@ -196,7 +218,7 @@ bool print_colorized_message(WINDOW *window)
  */
 void display(msg_t msg, void*)
 {
-    wprintw(log, "\n\n%s", msg);
+    wprintw(log, "\n\n%s <%s>", msg, rtosc_argument_string(msg));
     const unsigned nargs = rtosc_narguments(msg);
     for(unsigned i=0; i<nargs; ++i) {
         wprintw(log, "\n   ");
@@ -207,6 +229,11 @@ void display(msg_t msg, void*)
                 wattroff(log, COLOR_PAIR(3));
                 break;
             case 'i':
+                wattron(log, COLOR_PAIR(1));
+                wprintw(log, "%d", rtosc_argument(msg,i).i);
+                wattroff(log, COLOR_PAIR(1));
+                break;
+            case 'c':
                 wattron(log, COLOR_PAIR(1));
                 wprintw(log, "%d", rtosc_argument(msg,i).i);
                 wattroff(log, COLOR_PAIR(1));
@@ -266,7 +293,7 @@ void update_paths(msg_t m, void*)
 
         assert(rtosc_type(m, 1) == 'b');
         auto blob = rtosc_argument(m, 1).b;
-        delete status_metadata;
+        delete[] status_metadata;
         status_metadata = new char[blob.len];
         memcpy(status_metadata, blob.data, blob.len);
 
@@ -420,13 +447,9 @@ string toString(const T &t)
 
 int handler_function(const char *path, const char *, lo_arg **, int, lo_message msg, void *)
 {
-    //lo_address addr = lo_message_get_source(msg);
-    //if(addr)
-    //    response_url = lo_address_get_url(addr);
-
-    static char buffer[4096];
+    static char buffer[1024*20];
     memset(buffer, 0, sizeof(buffer));
-    size_t size = 4096;
+    size_t size = sizeof(buffer);
     lo_message_serialise(msg, path, buffer, &size);
     if(!strcmp("/paths", buffer)) // /paths:sbsbsbsbsb...
         update_paths(buffer, NULL);
@@ -437,6 +460,8 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
             status_value = toString(rtosc_argument(buffer,0).f);
         else if(!strcmp(rtosc_argument_string(buffer), "i"))
             status_value = toString(rtosc_argument(buffer,0).i);
+        else if(!strcmp(rtosc_argument_string(buffer), "c"))
+            status_value = toString((int)rtosc_argument(buffer,0).i);
         else if(!strcmp(rtosc_argument_string(buffer), "T"))
             status_value = "T";
         else if(!strcmp(rtosc_argument_string(buffer), "F"))
@@ -503,11 +528,12 @@ int main()
     curs_set(0);
 
     start_color();
-    init_pair(1, COLOR_BLUE,   COLOR_BLACK);
-    init_pair(2, COLOR_RED,    COLOR_BLACK);
-    init_pair(3, COLOR_GREEN,  COLOR_BLACK);
-    init_pair(4, COLOR_CYAN,   COLOR_BLACK);
-    init_pair(5, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(1, COLOR_BLUE,    COLOR_BLACK);
+    init_pair(2, COLOR_RED,     COLOR_BLACK);
+    init_pair(3, COLOR_GREEN,   COLOR_BLACK);
+    init_pair(4, COLOR_CYAN,    COLOR_BLACK);
+    init_pair(5, COLOR_YELLOW,  COLOR_BLACK);
+    init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
 
     //Define windows
     log    = newwin(LINES-3, COLS/2-3, 1, 1);
