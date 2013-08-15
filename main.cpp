@@ -496,6 +496,12 @@ void process_message(void)
                 lo_send(lo_addr, "/path-search", "ss", "", "");
         }
 
+    } else if(strstr(m, "help")==m) {
+        wprintw(log, "\nWelcome to oscprompt...\n");
+        wprintw(log, "To start talking to an app please run\nconnect PORT\n");
+        wprintw(log, "From here you can enter in osc paths with arguments to send messages. ");
+        wprintw(log, "Assuming that everything has connected properly you should see some metadata ");
+        wprintw(log, "telling you about the ports...\n");
     } else { //normal OSC message
         if(error)
             wprintw(status,"bad message...");
