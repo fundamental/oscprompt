@@ -12,6 +12,11 @@
 using namespace rtosc;
 using std::string;
 
+//History
+char history_buffer[32][1024];
+int  history_pos;
+const int history_size = 32;
+
 //Global buffer for user entry
 char message_buffer[1024];
 char message_arguments[32];
@@ -509,6 +514,13 @@ void process_message(void)
             send_message();
     }
 
+    //History Buffer
+    for(unsigned i=sizeof(history_buffer)/sizeof(history_buffer[0])-1; i>0; --i)
+        memcpy(history_buffer[i], history_buffer[i-1], sizeof(history_buffer[0]));
+    memcpy(history_buffer[0], message_buffer, sizeof(message_buffer));
+    history_pos = 0;
+
+
     //Reset message buffer
     memset(message_buffer,    0, 1024);
     memset(message_arguments, 0, 32);
@@ -522,7 +534,9 @@ int main()
     setlocale(LC_ALL, "");
 
     memset(message_buffer,   0,sizeof(message_buffer));
+    memset(history_buffer,   0,sizeof(history_buffer));
     memset(message_arguments,0,sizeof(message_arguments));
+    history_pos = 0;
     int ch;
 
 
@@ -592,6 +606,18 @@ int main()
                 if(message_pos)
                     message_buffer[--message_pos] = 0;
                 rebuild_status();
+                break;
+            case 91: //escape
+                ch = wgetch(prompt);
+                if(ch == 'A') {//up
+                    history_pos = (history_pos+1)%history_size;
+                    memcpy(message_buffer, history_buffer[history_pos], sizeof(message_buffer));
+                    message_pos = strlen(message_buffer);
+                } else if(ch == 'B') {//down
+                    history_pos = (history_pos-1+history_size)%history_size;
+                    memcpy(message_buffer, history_buffer[history_pos], sizeof(message_buffer));
+                    message_pos = strlen(message_buffer);
+                }
                 break;
             case '\t':
                 tab_complete();
