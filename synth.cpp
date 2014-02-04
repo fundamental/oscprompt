@@ -2,6 +2,7 @@
 #include <jack/midiport.h>
 #include <rtosc/thread-link.h>
 #include <rtosc/miditable.h>
+#include <rtosc/port-sugar.h>
 #include <lo/lo.h>
 #include <unistd.h>
 #include <cstdio>
@@ -50,11 +51,13 @@ void echo(const char *, RtData){
     bToU.raw_write(uToB.peak());
 }
 
+#define rObject Oscil
 Ports Oscil::ports = {
-    PARAMF(Oscil, cents,   cents,  lin, -1200, 1200, "Detune in cents"),
-    PARAMF(Oscil, volume,  volume, lin, 0.0,  1.0, "Volume on linear scale"),
-    PARAMI(Oscil, shape,   shape,  2, "Shape of Oscillator: {sine, saw, square}")
+    rParamF(cents, rLinear(-1200, 1200), "Detune in cents"),
+    rParamF(volume, rLinear(0.0, 1.0), "Volume on linear scale"),
+    rParamI(shape,  rMap(max, 2), "Shape of Oscillator: {sine, saw, square}")
 };
+#undef rObject
 
 void help(msg_t,RtData)
 {
@@ -72,10 +75,11 @@ void help(msg_t,RtData)
             "Good Luck...");
 }
 
+#define rObject Synth
 Ports Synth::ports = {
-    PARAMF(Synth, freq,   freq,   lin, 0, 20e3, "Base frequency of note"),
+    rParamF(freq, rLinear(0, 20e3), "Base frequency of note"),
     PARAMT(Synth, enable, enable, "Enable or disable audio output"),
-    RECURS(Synth, Oscil,  oscil,  oscil, 16, "Oscillator bank element")
+    rRecurs(oscil, 16, "Oscillator bank element")
 };
 
 void apropos(msg_t m, RtData);
@@ -85,12 +89,12 @@ bool do_exit = false;
 
 Ports ports = {
     //Meta port
-    {"echo",             ":hidden\0" DOC("Echo all parameters back"), 0, echo},
-    {"help:",            DOC("Display help to user"),                 0, help},
-    {"apropos:s",        DOC("Find the best match"),                  0, apropos},
-    {"describe:s",       DOC("Print out a description of a port"),    0, describe},
-    {"midi-register:is", DOC("Register a midi port <ctl id, path>"),  0, midi_register},
-    {"quit:",            DOC("Quit the program"), 0,
+    {"echo",             ":hidden\0" rDoc("Echo all parameters back"), 0, echo},
+    {"help:",            rDoc("Display help to user"),                 0, help},
+    {"apropos:s",        rDoc("Find the best match"),                  0, apropos},
+    {"describe:s",       rDoc("Print out a description of a port"),    0, describe},
+    {"midi-register:is", rDoc("Register a midi port <ctl id, path>"),  0, midi_register},
+    {"quit:",            rDoc("Quit the program"), 0,
         [](msg_t, RtData){do_exit=true; bToU.write("/disconnect","");}},
     //{"snarf:",           "::Save an image for parameters", 0,
     //    [](msg_t,RtData){snarf();}},
@@ -100,7 +104,7 @@ Ports ports = {
 
 
     //Normal ports
-    {"synth/", DOC("Main ports for synthesis"), &Synth::ports,
+    {"synth/", rDoc("Main ports for synthesis"), &Synth::ports,
         [](msg_t m, RtData &d){d.obj = &synth; Synth::ports.dispatch(snip(m), d); }},
 };
 
@@ -191,17 +195,39 @@ void midi_register(msg_t m, RtData)
             rtosc_argument(m,1).s);
 }
 
+class RtPass:public RtData
+{
+    public:
+        void reply(const char *path, const char *args, ...)
+        {
+            va_list va;
+            va_start(va,args);
+            const size_t len =
+                rtosc_vmessage(bToU.buffer(),bToU.buffer_size(),path,args,va);
+            if(len)
+                bToU.raw_write(bToU.buffer());
+        }
+
+        void reply(const char *msg)
+        {
+            bToU.raw_write(msg);
+        }
+};
+
 int process(unsigned nframes, void*)
 {
     char loc_buf[1024];
     memset(loc_buf, 0, sizeof(loc_buf));
-    RtData d;
+    RtPass d;
     d.loc = loc_buf;
     d.loc_size = 1024;
     d.obj = NULL;
     //Handle user events
-    while(uToB.hasNext())
-        ports.dispatch(uToB.read()+1, d);
+    while(uToB.hasNext()) {
+        d.matches = 0;
+        const char *msg = uToB.read();
+        ports.dispatch(msg+1, d);
+    }
 
     //Handle midi events
     void *midi_buf = jack_port_get_buffer(iport, nframes);
