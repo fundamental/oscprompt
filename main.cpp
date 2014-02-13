@@ -9,6 +9,7 @@
 #include <cctype>
 #include <string>
 #include <sstream>
+#include "render.h"
 using namespace rtosc;
 using std::string;
 
@@ -16,12 +17,6 @@ using std::string;
 char history_buffer[32][1024];
 int  history_pos;
 const int history_size = 32;
-
-//Global buffer for user entry
-char message_buffer[1024];
-char message_arguments[32];
-int  message_pos=0;
-int  message_narguments=0;
 
 //Tab completion recommendation
 string tab_recommendation;
@@ -32,16 +27,6 @@ int error = 0;
 //Liblo destination
 lo_address lo_addr;
 
-//UI Windows
-WINDOW *prompt;  //The input pane
-WINDOW *log;     //The outupt pane
-WINDOW *status;  //The pattern matching and documentation pane
-
-//Status tab globals
-string status_url;
-string status_name;
-char *status_metadata;
-string status_value;
 
 /**
  * Parses simple messages from strings into something that librtosc can accept
@@ -109,152 +94,12 @@ void send_message(void)
     delete [] args;
 }
 
-//Check if a string is a float
-int float_p(const char *str)
-{
-    int result = 0;
-    while(*str && *str != ' ')
-        result |= *str++ == '.';
-    return result;
-}
 
-bool print_colorized_message(WINDOW *window)
-{
-    //Reset globals
-    message_narguments = 0;
-
-    bool error = false;
-    const char *str = message_buffer;
-
-    //Print the path
-    wattron(window, A_BOLD);
-    while(*str && *str!=' ')
-        wprintw(window, "%c", *str++);
-    wattroff(window, A_BOLD);
-
-    do {
-        while(*str==' ')
-            wprintw(window, " "), ++str;
-
-        const bool is_float = float_p(str);
-        switch(*str)
-        {
-            case '-':
-            case '.':
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                message_arguments[message_narguments++] = is_float ? 'f' : 'i';
-
-                wattron(window, COLOR_PAIR(is_float ? 4:1));
-                while(*str && (isdigit(*str) || *str == '.' || *str == '-'))
-                    wprintw(window, "%c",*str++);
-                wattroff(window, COLOR_PAIR(is_float ? 4:1));
-
-                //Stuff was left on the end of the the number
-                while(*str && *str != ' ') {
-                    error = true;
-                    wattron(window, COLOR_PAIR(2));
-                    wprintw(window, "%c", *str++);
-                    wattroff(window, COLOR_PAIR(2));
-                }
-                break;
-
-            case 'c': //Char type
-                message_arguments[message_narguments++] = 'c';
-                wattron(window, COLOR_PAIR(6));
-                wprintw(window, "%c",*str++);
-                while(*str && isdigit(*str))
-                    wprintw(window, "%c",*str++);
-                wattroff(window, COLOR_PAIR(6));
-
-                //Stuff was left on the end of the the number
-                while(*str && *str != ' ') {
-                    error = true;
-                    wattron(window, COLOR_PAIR(2));
-                    wprintw(window, "%c", *str++);
-                    wattroff(window, COLOR_PAIR(2));
-                }
-                break;
-
-            case 'T':
-            case 'F':
-                message_arguments[message_narguments++] = *str;
-                wattron(window, COLOR_PAIR(5));
-                wprintw(window, "%c", *str++);
-                wattroff(window, COLOR_PAIR(5));
-                break;
-
-            case '"':
-                message_arguments[message_narguments++] = 's';
-                wattron(window, COLOR_PAIR(3));
-                wprintw(window, "%c",*str++);
-                while(*str && *str != '"')
-                    wprintw(window, "%c",*str++);
-                if(*str == '"')
-                    wprintw(window, "%c",*str++);
-                else
-                    error = true;
-                wattroff(window, COLOR_PAIR(3));
-                break;
-            default:
-                wattron(window, COLOR_PAIR(2));
-                wprintw(window, "%c", *str++);
-                wattroff(window, COLOR_PAIR(2));
-                error = true;
-            case '\0':
-                ;
-        }
-
-    } while(*str); //Parse more args
-    return error;
-}
 
 
 /**
  * Write a "/display *" style message to the log screen piece by piece
  */
-void display(msg_t msg, void*)
-{
-    wprintw(log, "\n\n%s <%s>", msg, rtosc_argument_string(msg));
-    const unsigned nargs = rtosc_narguments(msg);
-    for(unsigned i=0; i<nargs; ++i) {
-        wprintw(log, "\n   ");
-        switch(rtosc_type(msg, i)) {
-            case 's':
-                wattron(log, COLOR_PAIR(3));
-                wprintw(log, "%s", rtosc_argument(msg,i).s);
-                wattroff(log, COLOR_PAIR(3));
-                break;
-            case 'i':
-                wattron(log, COLOR_PAIR(1));
-                wprintw(log, "%d", rtosc_argument(msg,i).i);
-                wattroff(log, COLOR_PAIR(1));
-                break;
-            case 'c':
-                wattron(log, COLOR_PAIR(1));
-                wprintw(log, "%d", rtosc_argument(msg,i).i);
-                wattroff(log, COLOR_PAIR(1));
-                break;
-            case 'f':
-                wattron(log, COLOR_PAIR(4));
-                wprintw(log, "%f", rtosc_argument(msg,i).f);
-                wattroff(log, COLOR_PAIR(4));
-                break;
-            case 'b':
-                wprintw(log, "<b>");
-                break;
-        }
-    }
-    //wrefresh(log);
-}
 
 int do_exit = 0;
 
@@ -262,14 +107,6 @@ void die_nicely(msg_t, void*)
 {
     do_exit = 1;
 }
-
-enum presentation_t
-{
-    SHORT,
-    LONG
-};
-
-void emit_status_field(const char *name, const char *metadata, presentation_t mode);
 
 void update_paths(msg_t m, void*)
 {
@@ -319,65 +156,6 @@ void update_paths(msg_t m, void*)
                           (const char*)rtosc_argument(m,2*i+1).b.data,
                           fields==1 ? LONG : SHORT);
     wrefresh(status);
-}
-
-void emit_status_field(const char *name, const char *metadata, presentation_t mode)
-{
-    if(!metadata)
-        metadata = "";
-
-    rtosc::Port::MetaContainer itr(metadata);
-
-    const char *doc_str = itr["documentation"];
-
-    int color = 0;
-    if(strstr(name, ":f"))
-        color = 4;
-    else if(strstr(name, ":i"))
-        color = 1;
-    else if(strstr(name, ":T") || strstr(name, ":F"))
-        color = 5;
-    else if(strstr(name, ":s"))
-        color = 3;
-    else
-        color = 2;
-
-    wattron(status, A_BOLD);
-    if(color)
-        wattron(status, COLOR_PAIR(color));
-    wprintw(status, "%s ::\n", name);
-    if(color)
-        wattroff(status, COLOR_PAIR(color));
-    wattroff(status, A_BOLD);
-
-    wprintw(status,"    %s\n", doc_str);
-
-    if(mode==LONG) {
-        wattron(status, A_BOLD);
-        wprintw(status, "  Properties:\n");
-        wattroff(status, A_BOLD);
-        for(auto val : itr) {
-            if(val.value)
-                wprintw(status, "    %s: %s\n", val.title, val.value);
-            else
-                wprintw(status, "    %s\n", val.title);
-        }
-
-        wprintw(status, "\n");
-
-        if(itr.find("parameter") != itr.end()) {
-            wattron(status, A_BOLD);
-            wprintw(status, "  Value:\n");
-            wattroff(status, A_BOLD);
-
-            wprintw(status, "    %s ", status_value.c_str());
-
-            if(itr["units"])
-                wprintw(status, "%s", itr["units"]);
-            wprintw(status, "\n");
-            //wprintw(status, "'%s'"
-        }
-    }
 }
 
 void rebuild_status(void)
@@ -461,16 +239,23 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
     else if(!strcmp("/exit", buffer))
         die_nicely(buffer, NULL);
     else if(status_url == path) {
-        if(!strcmp(rtosc_argument_string(buffer), "f"))
+        if(!strcmp(rtosc_argument_string(buffer), "f")) {
             status_value = toString(rtosc_argument(buffer,0).f);
-        else if(!strcmp(rtosc_argument_string(buffer), "i"))
+            status_type  = 'f';
+        } else if(!strcmp(rtosc_argument_string(buffer), "i")) {
             status_value = toString(rtosc_argument(buffer,0).i);
-        else if(!strcmp(rtosc_argument_string(buffer), "c"))
+            status_type = 'i';
+        } else if(!strcmp(rtosc_argument_string(buffer), "c")) {
             status_value = toString((int)rtosc_argument(buffer,0).i);
-        else if(!strcmp(rtosc_argument_string(buffer), "T"))
+            status_type = 'c';
+        } else if(!strcmp(rtosc_argument_string(buffer), "T")) {
             status_value = "T";
-        else if(!strcmp(rtosc_argument_string(buffer), "F"))
+            status_type = 'T';
+        } else if(!strcmp(rtosc_argument_string(buffer), "F")) {
             status_value = "F";
+            status_type = 'T';
+        } else
+            status_type = 0;
         werase(status);
         emit_status_field(status_name.c_str(), status_metadata, LONG);
         wrefresh(status);
@@ -528,6 +313,28 @@ void process_message(void)
     message_pos             = 0;
 }
 
+void try_param_add(void)
+{
+    if(status_url.empty() || status_value.empty() || status_type == 0)
+        return;
+    if(status_type == 'c') {
+        int x = atoi(status_value.c_str());
+        if(x != 127)
+            lo_send(lo_addr, status_url.c_str(), "c", x+1);
+    }
+}
+
+void try_param_sub(void)
+{
+    if(status_url.empty() || status_value.empty() || status_type == 0)
+        return;
+    if(status_type == 'c') {
+        int x = atoi(status_value.c_str());
+        if(x != 0)
+            lo_send(lo_addr, status_url.c_str(), "c", x-1);
+    }
+}
+
 int main()
 {
     //For misc utf8 chars
@@ -540,38 +347,8 @@ int main()
     int ch;
 
 
-    //Initialize NCurses
-    initscr();
-    raw();
-    keypad(stdscr, TRUE);
-    noecho();
-    curs_set(0);
+    render_setup();
 
-    start_color();
-    init_pair(1, COLOR_BLUE,    COLOR_BLACK);
-    init_pair(2, COLOR_RED,     COLOR_BLACK);
-    init_pair(3, COLOR_GREEN,   COLOR_BLACK);
-    init_pair(4, COLOR_CYAN,    COLOR_BLACK);
-    init_pair(5, COLOR_YELLOW,  COLOR_BLACK);
-    init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
-
-    //Define windows
-    log    = newwin(LINES-3, COLS/2-3, 1, 1);
-    status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
-    prompt = newwin(1, COLS, LINES-1,0);
-    scrollok(log, TRUE);
-    idlok(log, TRUE);
-    wtimeout(prompt, 10);
-    {
-        WINDOW *helper_box = newwin(LINES-1,COLS/2-1,0,0);
-        box(helper_box,0,0);
-        wrefresh(helper_box);
-    }
-    {
-        WINDOW *helper_box = newwin(LINES-1,COLS/2,0,COLS/2);
-        box(helper_box,0,0);
-        wrefresh(helper_box);
-    }
 
     //setup liblo - it can choose its own port
     lo_server server = lo_server_new_with_proto(NULL, LO_UDP, error_cb);
@@ -600,6 +377,12 @@ int main()
 
         //FILE *file;
         switch(ch = wgetch(prompt)) {
+            case '+':
+                try_param_add();
+                break;
+            case '-':
+                try_param_sub();
+                break;
             case KEY_BACKSPACE:
             case '':
             case 127: //ascii 'DEL'
