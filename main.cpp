@@ -94,13 +94,6 @@ void send_message(void)
     delete [] args;
 }
 
-
-
-
-/**
- * Write a "/display *" style message to the log screen piece by piece
- */
-
 int do_exit = 0;
 
 void die_nicely(msg_t, void*)
@@ -228,6 +221,30 @@ string toString(const T &t)
     return converter.str();
 }
 
+void update_status_info(const char *buffer)
+{
+    if(!strcmp(rtosc_argument_string(buffer), "f")) {
+        status_value = toString(rtosc_argument(buffer,0).f);
+        status_type  = 'f';
+    } else if(!strcmp(rtosc_argument_string(buffer), "i")) {
+        status_value = toString(rtosc_argument(buffer,0).i);
+        status_type = 'i';
+    } else if(!strcmp(rtosc_argument_string(buffer), "c")) {
+        status_value = toString((int)rtosc_argument(buffer,0).i);
+        status_type = 'c';
+    } else if(!strcmp(rtosc_argument_string(buffer), "T")) {
+        status_value = "T";
+        status_type = 'T';
+    } else if(!strcmp(rtosc_argument_string(buffer), "F")) {
+        status_value = "F";
+        status_type = 'T';
+    } else
+        status_type = 0;
+    werase(status);
+    emit_status_field(status_name.c_str(), status_metadata, LONG);
+    wrefresh(status);
+}
+
 int handler_function(const char *path, const char *, lo_arg **, int, lo_message msg, void *)
 {
     static char buffer[1024*20];
@@ -238,28 +255,11 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
         update_paths(buffer, NULL);
     else if(!strcmp("/exit", buffer))
         die_nicely(buffer, NULL);
-    else if(status_url == path) {
-        if(!strcmp(rtosc_argument_string(buffer), "f")) {
-            status_value = toString(rtosc_argument(buffer,0).f);
-            status_type  = 'f';
-        } else if(!strcmp(rtosc_argument_string(buffer), "i")) {
-            status_value = toString(rtosc_argument(buffer,0).i);
-            status_type = 'i';
-        } else if(!strcmp(rtosc_argument_string(buffer), "c")) {
-            status_value = toString((int)rtosc_argument(buffer,0).i);
-            status_type = 'c';
-        } else if(!strcmp(rtosc_argument_string(buffer), "T")) {
-            status_value = "T";
-            status_type = 'T';
-        } else if(!strcmp(rtosc_argument_string(buffer), "F")) {
-            status_value = "F";
-            status_type = 'T';
-        } else
-            status_type = 0;
-        werase(status);
-        emit_status_field(status_name.c_str(), status_metadata, LONG);
-        wrefresh(status);
-    } else
+    else if(status_url == path)
+        update_status_info(buffer);
+    else if(!strcmp("undo_change", buffer))
+        ;//ignore undo messages
+    else
         display(buffer, NULL);
 
     return 0;
@@ -313,25 +313,30 @@ void process_message(void)
     message_pos             = 0;
 }
 
-void try_param_add(void)
+template<class T>
+T min(T a, T b) { return b<a?b:a; }
+template<class T>
+T max(T a, T b) { return b<a?a:b; }
+
+void try_param_add(int size)
 {
     if(status_url.empty() || status_value.empty() || status_type == 0)
         return;
     if(status_type == 'c') {
         int x = atoi(status_value.c_str());
         if(x != 127)
-            lo_send(lo_addr, status_url.c_str(), "c", x+1);
+            lo_send(lo_addr, status_url.c_str(), "c", min(127,x+size));
     }
 }
 
-void try_param_sub(void)
+void try_param_sub(int size)
 {
     if(status_url.empty() || status_value.empty() || status_type == 0)
         return;
     if(status_type == 'c') {
         int x = atoi(status_value.c_str());
         if(x != 0)
-            lo_send(lo_addr, status_url.c_str(), "c", x-1);
+            lo_send(lo_addr, status_url.c_str(), "c", max(0,x-size));
     }
 }
 
@@ -377,11 +382,17 @@ int main()
 
         //FILE *file;
         switch(ch = wgetch(prompt)) {
-            case '+':
-                try_param_add();
+            case '\\':
+                try_param_add(1);
                 break;
-            case '-':
-                try_param_sub();
+            case ']':
+                try_param_sub(1);
+                break;
+            case '|':
+                try_param_add(10);
+                break;
+            case '}':
+                try_param_sub(10);
                 break;
             case KEY_BACKSPACE:
             case '':
