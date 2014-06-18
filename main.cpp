@@ -205,6 +205,10 @@ void tab_complete(void)
 
     while(*src && *src != '#' && *src != ':')
         *w_ptr++ = *src++;
+
+    if(*w_ptr != '\0' && *src == '#')
+        strcat(message_buffer, "/");
+
     message_pos = strlen(message_buffer);
 }
 
