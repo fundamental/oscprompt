@@ -3,7 +3,7 @@ project(oscprompt)
 
 find_package(PkgConfig REQUIRED)
 
-pkg_search_module(LIBLO liblo>=0.26 REQUIRED)
+pkg_search_module(LIBLO liblo>=0.25 REQUIRED)
 mark_as_advanced(LIBLO_LIBRARIES)
 
 pkg_search_module(LIBRTOSC librtosc>=0.1.0 REQUIRED)

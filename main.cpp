@@ -283,7 +283,7 @@ void process_message(void)
     else if(strstr(m, "connect")==m) {
         while(*m && !isdigit(*m)) ++m;
         if(isdigit(*m)) { //lets hope lo is robust :p
-            lo_addr = lo_address_new_with_proto(LO_UDP, NULL, m);
+            lo_addr = lo_address_new(NULL, m);
 
             //populate fields
             if(lo_addr)
