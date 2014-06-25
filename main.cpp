@@ -166,8 +166,13 @@ void rebuild_status(void)
     char *tmp          = rindex(s2, '/');
 
     if(!tmp) {
-       needle = s2;
-       path   = "";
+        needle = s2;
+        path   = "";
+
+        tmp = s2;
+        while(*tmp++)
+            if(isdigit(*tmp))
+                *tmp=0;
     } else {
         needle = tmp + 1;
 
