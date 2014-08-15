@@ -295,8 +295,12 @@ void process_message(void)
     //alias
     const char *m = message_buffer;
     //Check for special cases
-    if(strstr(m, "disconnect")==m)
-        lo_addr = NULL;
+    if(strstr(m, "disconnect")==m) {
+        if(lo_addr) {
+            lo_address_free(lo_addr);
+            lo_addr = NULL;
+	}
+    }
     else if(strstr(m, "quit")==m)
         do_exit = true;
     else if(strstr(m, "exit")==m)
@@ -304,6 +308,8 @@ void process_message(void)
     else if(strstr(m, "connect")==m) {
         while(*m && !isdigit(*m)) ++m;
         if(isdigit(*m)) { //lets hope lo is robust :p
+            if(lo_addr)
+                lo_address_free(lo_addr);
             lo_addr = lo_address_new(NULL, m);
 
             //populate fields
@@ -477,7 +483,10 @@ int main()
         }
 
     } while(!do_exit);
-
+    
+    lo_server_free(server);
+    delete[] status_metadata;
+    
     endwin();
     return 0;
 }
