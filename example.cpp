@@ -37,8 +37,6 @@ ThreadLink bToU(1024,1024);
 ThreadLink uToB(1024,1024);
 void display(const char *str){bToU.write("/display", "s", str);}
 
-#include "snarf.cpp"
-
 struct Oscil
 {
     float volume;
@@ -112,12 +110,6 @@ Ports ports = {
     {"midi-register:is", rDoc("Register a midi port <ctl id, path>"),  0, midi_register},
     {"quit:",            rDoc("Quit the program"), 0,
         [](msg_t, RtData){do_exit=true; bToU.write("/disconnect","");}},
-    //{"snarf:",           "::Save an image for parameters", 0,
-    //    [](msg_t,RtData){snarf();}},
-    //{"barf:",            "::Apply an image for parameters", 0,
-    //    [](msg_t,RtData){barf();}},
-
-
 
     //Normal ports
     {"synth/", rDoc("Main ports for synthesis"), &Synth::ports,
