@@ -16,6 +16,7 @@ mark_as_advanced(CURSES_FORM_LIBRARY)
 mark_as_advanced(CURSES_HAVE_CURSES_H)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -Wall -Wextra")
+set(BUILD_EXAMPLE FALSE CACHE BOOL "Build Example Application")
 
 
 #Main executable
@@ -27,13 +28,13 @@ target_link_libraries(oscprompt ${LIBLO_LIBRARIES}
                                 m)
 
 #Demo App
-if(JACK_FOUND)
+if(BUILD_EXAMPLE AND JACK_FOUND)
     add_executable(example-backend example.cpp)
     target_link_libraries(example-backend ${LIBLO_LIBRARIES}
                                           ${LIBRTOSC_LIBRARIES}
                                           rtosc-cpp
                                           m
                                           ${JACK_LIBRARIES})
-endif(JACK_FOUND)
+endif(BUILD_EXAMPLE AND JACK_FOUND)
 
 install(TARGETS oscprompt RUNTIME DESTINATION bin)

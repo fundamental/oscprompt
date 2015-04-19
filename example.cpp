@@ -55,7 +55,7 @@ struct Synth
     bool  enable;
     Oscil oscil[16];
 
-    static Ports ports;
+    static Ports &ports;
 } synth;
 
 jack_port_t   *port, *iport;
@@ -90,11 +90,12 @@ void help(msg_t,RtData)
 }
 
 #define rObject Synth
-Ports Synth::ports = {
+Ports synth_ports = {
     rParamF(freq, rLinear(0, 20e3), "Base frequency of note"),
     PARAMT(Synth, enable, enable, "Enable or disable audio output"),
     rRecurs(oscil, 16, "Oscillator bank element")
 };
+Ports &Synth::ports = synth_ports;
 
 void apropos(msg_t m, RtData);
 void describe(msg_t m, RtData);
