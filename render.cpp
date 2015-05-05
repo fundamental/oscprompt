@@ -218,6 +218,9 @@ bool print_colorized_message(WINDOW *window)
 
 void emit_status_field(const char *name, const char *metadata, presentation_t mode)
 {
+    //The window's full, no sense in continuing to output
+    if(getcury(status) >= (getmaxy(status)-1))
+        return;
     if(!metadata)
         metadata = "";
 
