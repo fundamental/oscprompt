@@ -263,7 +263,7 @@ void emit_status_field(const char *name, const char *metadata, presentation_t mo
 
         wprintw(status, "\n");
 
-        if(itr.find("parameter") != itr.end()) {
+        {//if(itr.find("parameter") != itr.end()) {
             wattron(status, A_BOLD);
             wprintw(status, "  Value:\n");
             wattroff(status, A_BOLD);

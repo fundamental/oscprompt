@@ -246,23 +246,41 @@ string toString(const T &t)
     return converter.str();
 }
 
+int all_strings(const char *args)
+{
+    while(args && *args) {
+        if(*args != 's')
+            break;
+        args++;
+    }
+    return *args==0;
+}
+
 void update_status_info(const char *buffer)
 {
-    if(!strcmp(rtosc_argument_string(buffer), "f")) {
+    const char *args = rtosc_argument_string(buffer);
+    if(!strcmp(args , "f")) {
         status_value = toString(rtosc_argument(buffer,0).f);
         status_type  = 'f';
-    } else if(!strcmp(rtosc_argument_string(buffer), "i")) {
+    } else if(!strcmp(args, "i")) {
         status_value = toString(rtosc_argument(buffer,0).i);
         status_type = 'i';
-    } else if(!strcmp(rtosc_argument_string(buffer), "c")) {
+    } else if(!strcmp(args, "c")) {
         status_value = toString((int)rtosc_argument(buffer,0).i);
         status_type = 'c';
-    } else if(!strcmp(rtosc_argument_string(buffer), "T")) {
+    } else if(!strcmp(args, "T")) {
         status_value = "T";
         status_type = 'T';
-    } else if(!strcmp(rtosc_argument_string(buffer), "F")) {
+    } else if(!strcmp(args, "F")) {
         status_value = "F";
         status_type = 'T';
+    } else if(all_strings(args)) {
+        status_type = 's';
+        status_value = rtosc_argument(buffer,0).s;
+        for(int i=1; i<(int)rtosc_narguments(buffer); ++i) {
+            status_value += "\n";
+            status_value += rtosc_argument(buffer,i).s;
+        }
     } else
         status_type = 0;
     werase(status);
