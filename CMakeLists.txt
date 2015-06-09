@@ -23,16 +23,16 @@ set(BUILD_EXAMPLE FALSE CACHE BOOL "Build Example Application")
 add_executable(oscprompt main.cpp render.cpp)
 target_link_libraries(oscprompt ${LIBLO_LIBRARIES}
                                 ${CURSES_LIBRARIES}
-                                ${LIBRTOSC_LIBRARIES}
                                 rtosc-cpp
+                                ${LIBRTOSC_LIBRARIES}
                                 m)
 
 #Demo App
 if(BUILD_EXAMPLE AND JACK_FOUND)
     add_executable(example-backend example.cpp)
     target_link_libraries(example-backend ${LIBLO_LIBRARIES}
-                                          ${LIBRTOSC_LIBRARIES}
                                           rtosc-cpp
+                                          ${LIBRTOSC_LIBRARIES}
                                           m
                                           ${JACK_LIBRARIES})
 endif(BUILD_EXAMPLE AND JACK_FOUND)
