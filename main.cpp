@@ -43,6 +43,9 @@ int error = 0;
 //Liblo destination
 lo_address lo_addr;
 
+//Base path which can be used via 'cd' command
+string root_path;
+
 
 /**
  * Parses simple messages from strings into something that librtosc can accept
@@ -52,7 +55,8 @@ lo_address lo_addr;
  */
 void send_message(void)
 {
-    const char *str = message_buffer;
+    string tmp = root_path + message_buffer;
+    const char *str = tmp.c_str();
     char path[1024];
 
     //Load message path
@@ -135,7 +139,7 @@ void update_paths(msg_t m, void*)
     if(fields == 1 && tmp) {
         status_name = rtosc_argument(m, 0).s;
         *tmp = 0;
-        status_url = string(message_buffer) + "/" + status_name;
+        status_url = root_path + string(message_buffer) + "/" + status_name;
         *tmp = '/';
 
         auto trim = status_url.find(':');
@@ -170,7 +174,19 @@ void update_paths(msg_t m, void*)
 void rebuild_status(void)
 {
     //Base port level from synth code
-    const char *src    = strlen(message_buffer) ? message_buffer+1 : "";
+    string tmpstr      = (root_path.empty() ? root_path : root_path.substr(1));
+    if(tmpstr.empty()) {
+        if(strstr(message_buffer, "cd ") == message_buffer)
+            tmpstr = string(message_buffer+3);
+        else
+            tmpstr = strlen(message_buffer) ? message_buffer+1 : "";
+    } else {
+        if(strstr(message_buffer, "cd ") == message_buffer)
+            tmpstr += '/' + string(message_buffer+3);
+        else
+            tmpstr += string(message_buffer);
+    }
+    const char *src    = tmpstr.c_str();
     if(index(src, ' ')) return; //avoid complete strings
 
     //Trim the string to its last subpath.
@@ -308,6 +324,23 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
     return 0;
 }
 
+void change_dir(string dir)
+{
+    if(dir[0] == '/')
+        root_path = dir;
+    else if(root_path.empty() && dir[0] == '/')
+        root_path = dir;
+    else if(root_path.empty())
+        root_path = '/' + dir;
+    else if(dir[0] != '.')
+        root_path += '/' + dir;
+    else if(dir == "..") {
+        size_t itr = root_path.rfind('/');
+        if(itr != root_path.npos)
+            root_path = root_path.substr(0,itr);
+    }
+}
+
 void process_message(void)
 {
     //alias
@@ -317,7 +350,7 @@ void process_message(void)
         if(lo_addr) {
             lo_address_free(lo_addr);
             lo_addr = NULL;
-	}
+        }
     }
     else if(strstr(m, "quit")==m)
         do_exit = true;
@@ -341,9 +374,13 @@ void process_message(void)
         wprintw(log, "From here you can enter in osc paths with arguments to send messages. ");
         wprintw(log, "Assuming that everything has connected properly you should see some metadata ");
         wprintw(log, "telling you about the ports...\n");
+    } else if(strstr(m, "cd")==m && strlen(m) >= 4) {
+        change_dir(&m[3]);
+    } else if(*m != '/') {
+        wprintw(status, "Unrecognized command...\n");
     } else { //normal OSC message
         if(error)
-            wprintw(status,"bad message...");
+            wprintw(status,"bad message...\n");
         else
             send_message();
     }
@@ -414,7 +451,7 @@ int main()
     do {
         //Redraw prompt
         wclrtoeol(prompt);
-        wprintw(prompt,":> ");
+        wprintw(prompt,":%s> ", root_path.c_str());
         error = print_colorized_message(prompt);
         wprintw(prompt,"\r");
         wrefresh(prompt);
