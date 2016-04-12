@@ -87,12 +87,16 @@ void display(msg_t msg, void*)
                 break;
             case 'i':
                 wattron(log, COLOR_PAIR(1));
+                wattron(log, A_BOLD);
                 wprintw(log, "%d", rtosc_argument(msg,i).i);
+                wattroff(log, A_BOLD);
                 wattroff(log, COLOR_PAIR(1));
                 break;
             case 'c':
                 wattron(log, COLOR_PAIR(1));
+                wattron(log, A_BOLD);
                 wprintw(log, "%d", rtosc_argument(msg,i).i);
+                wattroff(log, A_BOLD);
                 wattroff(log, COLOR_PAIR(1));
                 break;
             case 'f':
@@ -162,10 +166,20 @@ bool print_colorized_message(WINDOW *window)
             case '9':
                 message_arguments[message_narguments++] = is_float ? 'f' : 'i';
 
-                wattron(window, COLOR_PAIR(is_float ? 4:1));
+                if(is_float)
+                    wattron(window, COLOR_PAIR(4));
+                else {
+                    wattron(window, COLOR_PAIR(1));
+                    wattron(window, A_BOLD);
+                }
                 while(*str && (isdigit(*str) || *str == '.' || *str == '-'))
                     wprintw(window, "%c",*str++);
-                wattroff(window, COLOR_PAIR(is_float ? 4:1));
+                if(is_float)
+                    wattroff(window, COLOR_PAIR(4));
+                else {
+                    wattroff(window, COLOR_PAIR(1));
+                    wattroff(window, A_BOLD);
+                }
 
                 //Stuff was left on the end of the the number
                 while(*str && *str != ' ') {
