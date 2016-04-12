@@ -125,6 +125,16 @@ bool print_colorized_message(WINDOW *window)
     bool error = false;
     const char *str = message_buffer;
 
+    //Print cd command
+    if(strstr(str, "cd ") == str) {
+        wattron(window, A_BOLD);
+        while(*str && *str!=' ')
+            wprintw(window, "%c", *str++);
+        wattroff(window, A_BOLD);
+        while(*str==' ')
+            wprintw(window, " "), ++str;
+    }
+
     //Print the path
     wattron(window, A_BOLD);
     while(*str && *str!=' ')

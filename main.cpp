@@ -184,8 +184,10 @@ void rebuild_status(void)
         if(strstr(message_buffer, "cd ") == message_buffer)
             tmpstr += '/' + string(message_buffer+3);
         else
-            tmpstr += string(message_buffer);
+            tmpstr += message_buffer;
     }
+    if(tmpstr[0] == '/')
+        tmpstr = tmpstr.substr(1);
     const char *src    = tmpstr.c_str();
     if(index(src, ' ')) return; //avoid complete strings
 
@@ -236,8 +238,19 @@ void tab_complete(void)
     if(w_ptr)
         ++w_ptr;
     else {
-        w_ptr = message_buffer+1;
-        message_buffer[0] = '/';
+        //change dir messages
+        if(strstr(message_buffer, "cd ")) {
+            if(root_path.empty()) {
+                w_ptr = message_buffer+4;
+                message_buffer[3] = '/';
+            } else {
+                w_ptr = message_buffer+3;
+            }
+        } else {
+            w_ptr = message_buffer+1;
+            message_buffer[0] = '/';
+        }
+
     }
 
     while(*src && *src != '#' && *src != ':')
@@ -245,6 +258,8 @@ void tab_complete(void)
 
     if(*w_ptr != '\0' && *src == '#')
         strcat(message_buffer, "/");
+    else
+        *w_ptr = '\0';
 
     message_pos = strlen(message_buffer);
 }
@@ -326,6 +341,9 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
 
 void change_dir(string dir)
 {
+    if(dir.length() != 1 && dir[dir.length()-1] == '/')
+        dir = dir.substr(0, dir.length()-1);
+
     if(dir[0] == '/')
         root_path = dir;
     else if(root_path.empty() && dir[0] == '/')
