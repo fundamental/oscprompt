@@ -406,7 +406,7 @@ void process_message(void)
     //History Buffer
     for(unsigned i=sizeof(history_buffer)/sizeof(history_buffer[0])-1; i>0; --i)
         memcpy(history_buffer[i], history_buffer[i-1], sizeof(history_buffer[0]));
-    memcpy(history_buffer[0], message_buffer, sizeof(message_buffer));
+    memcpy(history_buffer[1], message_buffer, sizeof(message_buffer));
     history_pos = 0;
 
 
