@@ -46,6 +46,9 @@ lo_address lo_addr;
 //Base path which can be used via 'cd' command
 string root_path;
 
+//Ignore one message from client
+int dummy_update;
+
 
 /**
  * Parses simple messages from strings into something that librtosc can accept
@@ -139,7 +142,10 @@ void update_paths(msg_t m, void*)
     if(fields == 1 && tmp) {
         status_name = rtosc_argument(m, 0).s;
         *tmp = 0;
-        status_url = root_path + string(message_buffer) + "/" + status_name;
+        string new_status = root_path + string(message_buffer) + "/" + status_name;
+        if(new_status != status_url)
+            dummy_update = 1; //permit one ignored message
+        status_url = new_status;
         *tmp = '/';
 
         auto trim = status_url.find(':');
@@ -329,9 +335,12 @@ int handler_function(const char *path, const char *, lo_arg **, int, lo_message 
         update_paths(buffer, NULL);
     else if(!strcmp("/exit", buffer))
         die_nicely(buffer, NULL);
-    else if(status_url == path)
+    else if(status_url == path) {
         update_status_info(buffer);
-    else if(!strcmp("undo_change", buffer))
+        if(!dummy_update)
+            display(buffer, NULL);
+        dummy_update = 0;
+    } else if(!strcmp("undo_change", buffer))
         ;//ignore undo messages
     else
         display(buffer, NULL);
