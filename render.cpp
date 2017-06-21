@@ -53,7 +53,7 @@ void render_setup(void)
     init_pair(4, COLOR_CYAN,    COLOR_BLACK);
     init_pair(5, COLOR_YELLOW,  COLOR_BLACK);
     init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
-    
+
     //Define windows
     log    = newwin(LINES-3, COLS/2-3, 1, 1);
     status = newwin(LINES-3, COLS/2-3, 1, COLS/2+1);
@@ -75,8 +75,11 @@ void render_setup(void)
 
 void display(msg_t msg, void*)
 {
-    wprintw(log, "\n\n%s <%s>", msg, rtosc_argument_string(msg));
     const unsigned nargs = rtosc_narguments(msg);
+    if(nargs > 8)
+        return;
+
+    wprintw(log, "\n\n%s <%s>", msg, rtosc_argument_string(msg));
     for(unsigned i=0; i<nargs; ++i) {
         wprintw(log, "\n   ");
         switch(rtosc_type(msg, i)) {
