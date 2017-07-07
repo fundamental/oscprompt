@@ -6,8 +6,6 @@ find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBLO liblo>=0.25 REQUIRED)
 mark_as_advanced(LIBLO_LIBRARIES)
 
-pkg_search_module(LIBRTOSC librtosc>=0.1.0 REQUIRED)
-
 pkg_search_module(JACK jack)
 
 find_package(Curses REQUIRED)
@@ -18,6 +16,9 @@ mark_as_advanced(CURSES_HAVE_CURSES_H)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -Wall -Wextra")
 set(BUILD_EXAMPLE FALSE CACHE BOOL "Build Example Application")
 
+#rtosc
+add_subdirectory(rtosc)
+include_directories(rtosc/include)
 
 #Main executable
 add_executable(oscprompt main.cpp render.cpp)
