@@ -240,6 +240,8 @@ bool print_colorized_message(WINDOW *window)
         }
 
     } while(*str); //Parse more args
+
+    message_arguments[message_narguments] = 0;
     return error;
 }
 
