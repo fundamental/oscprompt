@@ -1,5 +1,31 @@
 A generic OSC based prompt for inspecting and manipulating clients.
 
+Dependencies
+
+rtosc
+pkg-config
+Liblo
+cmake
+
+Optional. Only needed for API usage examples of the rtosc sub-library, not oscprompt itself.
+Jack
+NTK
+FLTK
+
+Compilation
+Clone the repository
+git clone https://github.com/fundamental/oscprompt.git
+
+Pull the rtosc submodule
+git submodule update --init
+
+Install dependencies
+sudo apt-get install liblo-dev cmake pkg-config
+
+Compile
+cmake .
+make
+
 Prompt accepts:
  - TAB
  - disconnect
@@ -14,3 +40,4 @@ and field information.
 This is currently Beta software and as such expect some interesting behavior
 from time to time.
 Discussion and bug reports are appreciated.
+
