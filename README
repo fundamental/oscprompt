@@ -14,3 +14,7 @@ and field information.
 This is currently Beta software and as such expect some interesting behavior
 from time to time.
 Discussion and bug reports are appreciated.
+
+To build, make sure liblo is installed on the system, the rtosc submodule is
+checked out (via git submodule update --init), and then use cmake (typically
+mkdir build && cd build && cmake .. && make is what you'd want).
