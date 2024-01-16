@@ -76,7 +76,8 @@ void send_message(void)
     //String buffer
     char buf[1024];
     char *b = buf;
-
+    char* endptr;
+    locale_t locale = newlocale(LC_ALL, "en_US", NULL);
     for(int i=0; i<message_narguments; ++i) {
         switch(message_arguments[i]) {
             case 'i':
@@ -85,7 +86,8 @@ void send_message(void)
                 if(message_arguments[i] == 'i')
                     args[i].i = atoi(str);
                 else
-                    args[i].f = atof(str);
+                    args[i].f = strtod_l(str, &endptr, locale);
+
                 while(isdigit(*str) || *str=='-' || *str=='.') ++str;
                 break;
             case 'c':
